@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Workplace Map Prototype</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f6f9;color:#172033}
+.app{display:grid;grid-template-columns:220px 1fr 300px;height:100vh}
+aside{background:#111827;color:#dbe3ef;padding:20px}.brand{font-size:18px;font-weight:800;margin-bottom:30px}.nav{padding:10px;border-radius:8px;margin:4px 0;color:#cbd5e1}.active{background:#315efb;color:white}.muted{color:#8c98aa;font-size:11px;text-transform:uppercase;margin:24px 8px 8px}
+main{min-width:0}.top{height:70px;background:white;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:12px;padding:15px 22px}.search{flex:1;max-width:520px;padding:11px 14px;border:1px solid #ddd;border-radius:9px}.content{padding:22px;overflow:auto;height:calc(100vh - 70px)}
+h1{margin:0;font-size:24px}.sub{color:#697386;margin:5px 0 18px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.stat,.card{background:white;border:1px solid #e3e6eb;border-radius:12px;padding:15px}.stat b{display:block;font-size:24px;margin-top:5px}
+.mapcard{background:white;border:1px solid #e3e6eb;border-radius:14px;overflow:hidden}.toolbar{padding:10px;border-bottom:1px solid #e5e7eb;display:flex;gap:7px;flex-wrap:wrap}.toolbar button,.filter{background:white;border:1px solid #ddd;border-radius:7px;padding:8px 11px;cursor:pointer}
+.toolbar button.active-tool{background:#315efb;color:white;border-color:#315efb}
+.map{height:570px;background:#edf0f4;padding:45px;overflow:hidden}.floor{height:100%;background-color:white;background-size:100% 100%;background-position:center;background-repeat:no-repeat;border:5px solid #cbd1d9;position:relative;box-shadow:0 8px 30px #0001}
+.floor.editing{outline:3px dashed #315efb;outline-offset:-3px}
+.desk{position:absolute;width:43px;height:28px;border-radius:5px;border:2px solid;font-size:9px;font-weight:700}
+.desk:not(.editing-mode){cursor:pointer}.desk:not(.editing-mode):hover{transform:scale(1.1)}
+.desk.editing-mode{cursor:grab;touch-action:none}.desk.editing-mode:active{cursor:grabbing}
+.desk.selected{box-shadow:0 0 0 2px #172033}
+.desk .del{position:absolute;top:-9px;right:-9px;width:16px;height:16px;border-radius:50%;background:#e35d6a;color:white;font-size:10px;line-height:16px;text-align:center;display:none}
+.desk.editing-mode .del{display:block}
+.available{background:#dff7e8;border-color:#35a866;color:#176d39}.occupied{background:#ffe2e2;border-color:#e35d6a;color:#9e2f3b}.reserved{background:#fff1c9;border-color:#d99a19;color:#805900}.assigned{background:#e7e8ff;border-color:#6366d8;color:#4749a8}
+.maplabel{position:absolute;padding:4px 10px;background:rgba(23,32,51,.85);color:white;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap}
+.maplabel:not(.editing-mode){cursor:default}
+.maplabel.editing-mode{cursor:grab;touch-action:none}.maplabel.editing-mode:active{cursor:grabbing}
+.maplabel.selected{box-shadow:0 0 0 2px #315efb}
+.maplabel .del{position:absolute;top:-9px;right:-9px;width:16px;height:16px;border-radius:50%;background:#e35d6a;color:white;font-size:10px;line-height:16px;text-align:center;display:none}
+.maplabel.editing-mode .del{display:block}
+.legend{padding:11px 14px;border-top:1px solid #e5e7eb;color:#697386;font-size:12px;display:flex;gap:18px}.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px}
+.right{background:white;border-left:1px solid #e5e7eb;padding:22px;overflow:auto}.label{color:#7b8492;text-transform:uppercase;font-size:11px;letter-spacing:.08em;margin-bottom:10px}.person{display:flex;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid #eee}.avatar{width:42px;height:42px;border-radius:50%;background:#e5e9f4;display:grid;place-items:center;font-weight:700;color:#315efb}.person small{display:block;color:#697386;margin-top:3px}.row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #eee;font-size:13px}.row span{color:#697386}.btn{width:100%;padding:11px;border:0;border-radius:8px;margin-top:10px;cursor:pointer;font-weight:700}.primary{background:#315efb;color:white}.secondary{background:#eef2ff;color:#315efb}
+.editrow{margin:0 0 12px}.editrow label{display:block;font-size:11px;color:#7b8492;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}.editrow input,.editrow select{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font:inherit}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#172033;color:white;padding:10px 18px;border-radius:8px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+@media(max-width:1000px){.app{grid-template-columns:190px 1fr}.right{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand">▦ Workplace Map</div>
+  <div class="muted">Workspace</div>
+  <div class="nav active">Floor Map</div><div class="nav">People</div><div class="nav">Bookings</div><div class="nav">Analytics</div>
+  <div class="muted">Locations</div>
+  <div class="nav">Toronto Office</div><div class="nav active" onclick="floor('Floor 2')">Floor 2</div><div class="nav" onclick="floor('Floor 3')">Floor 3</div><div class="nav" onclick="floor('Floor 4')">Floor 4</div>
+  <div class="muted">Administration</div><div class="nav">Settings</div>
+</aside>
+<section>
+<header class="top">
+<input class="search" id="search" placeholder="Search people, desks, rooms or teams..." oninput="search()">
+<button class="filter">Today · Aug 18 ▾</button><div class="avatar">VO</div>
+</header>
+<div class="content">
+<h1 id="title">Toronto Office · Floor 2</h1>
+<div class="sub">Interactive workplace map · Live workspace status</div>
+<div class="stats"><div class="stat">Total Workspaces<b id="statTotal">0</b></div><div class="stat">Available<b id="statAvail">0</b></div><div class="stat">Occupied<b id="statOcc">0</b></div><div class="stat">Reserved<b id="statRes">0</b></div></div>
+<div class="mapcard">
+<div class="toolbar">
+  <button onclick="document.getElementById('bgInput').click()">🖼 Set Background</button>
+  <input type="file" id="bgInput" accept="image/*" style="display:none" onchange="setBackground(this)">
+  <span style="flex:1"></span>
+  <button id="editBtn" onclick="setMode('desks')">✎ Edit Desks</button>
+  <button id="addDeskBtn" onclick="addDesk()" style="display:none">＋ Add Desk</button>
+  <button id="addLabelBtn" onclick="addLabel()" style="display:none">🏷 Add Label</button>
+  <button id="saveBtn" onclick="saveLayout()" style="display:none">💾 Save Layout</button>
+  <button>⛶ Full screen</button>
+</div>
+<div class="map"><div class="floor" id="floorEl">
+<div id="desks"></div>
+<div id="labels"></div>
+</div></div>
+<div class="legend">
+<span><i class="dot available"></i>Available</span><span><i class="dot occupied"></i>Occupied</span><span><i class="dot reserved"></i>Reserved</span><span><i class="dot assigned"></i>Assigned</span>
+</div>
+</div>
+</div>
+</section>
+<aside class="right">
+<div class="label">Selected Workspace</div><div id="selected" class="card">Click a desk on the map.</div>
+<div class="label" style="margin-top:25px">People Nearby</div>
+<div class="card">
+<div class="person"><div class="avatar">JS</div><div><b>John Smith</b><small>Technology · T-01</small></div></div>
+<div class="person"><div class="avatar">MC</div><div><b>Maria Costa</b><small>Operations · O-01</small></div></div>
+<div class="person"><div class="avatar">DL</div><div><b>David Lee</b><small>Technology · T-03</small></div></div>
+</div>
+<button class="btn primary" onclick="alert('Booking workflow')">＋ Book a workspace</button>
+<button class="btn secondary" onclick="alert('Employee locator')">⌕ Find a person</button>
+</aside>
+</div>
+<div id="toast"></div>
+<script>
+const NAMES=["John Smith","Sarah Chen","David Lee","Michael Brown","Emma Wilson","Daniel Kim","Olivia Martin","Noah Taylor","Sophia Clark","Liam Walker","Maria Costa","James Wilson","Ana Silva","Robert King","Emily Davis","Lucas Moore","Mia Hall","Chris Young","Ava Allen","Ethan Scott"];
+const STATES=["assigned","occupied","occupied","reserved","available","occupied","available","assigned","occupied","available","occupied","available","reserved","occupied","available","occupied","available","assigned","occupied","available"];
+
+function defaultLayout(){
+  const list=[];
+  for(let i=0;i<20;i++){
+    const team=i<10?"T":"O", n=(i%10)+1, id=team+"-"+String(n).padStart(2,"0");
+    list.push({id,name:NAMES[i],team:team==="T"?"Technology":"Operations",state:STATES[i],
+      left:27+(i%5)*8.2, top:(i<10?11:58)+Math.floor((i%10)/5)*15});
+  }
+  return list;
+}
+
+function loadInitialData(){
+  const saved=localStorage.getItem('workplaceLayout');
+  const list=saved?JSON.parse(saved):defaultLayout();
+  const obj={};
+  list.forEach(d=>obj[d.id]=d);
+  return obj;
+}
+function loadInitialLabels(){
+  const saved=localStorage.getItem('workplaceLabels');
+  const list=saved?JSON.parse(saved):[];
+  const obj={};
+  list.forEach(l=>obj[l.id]=l);
+  return obj;
+}
+
+let data=loadInitialData();
+let labels=loadInitialLabels();
+let mode='view'; // 'view' | 'desks'
+let selectedId=null;
+let selectedLabelId=null;
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function initials(name){return name.split(" ").map(a=>a[0]).join("");}
+
+function updateStats(){
+  const vals=Object.values(data);
+  const count=k=>vals.filter(d=>d.state===k).length;
+  document.getElementById('statTotal').textContent=vals.length;
+  document.getElementById('statAvail').textContent=count('available');
+  document.getElementById('statOcc').textContent=count('occupied');
+  document.getElementById('statRes').textContent=count('reserved');
+}
+
+/* ---- Shared drag ---- */
+function attachDrag(el,id,store){
+  el.addEventListener('pointerdown', e=>{
+    if(mode!=='desks') return;
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    el.dataset.dragged='0';
+    const floorEl=document.getElementById('floorEl');
+    const rect=floorEl.getBoundingClientRect();
+    const startX=e.clientX, startY=e.clientY;
+    const startLeft=store[id].left, startTop=store[id].top;
+    function onMove(ev){
+      const dx=ev.clientX-startX, dy=ev.clientY-startY;
+      if(Math.abs(dx)>3||Math.abs(dy)>3) el.dataset.dragged='1';
+      const newLeft=clamp(startLeft+dx/rect.width*100,0,95);
+      const newTop=clamp(startTop+dy/rect.height*100,0,93);
+      store[id].left=newLeft; store[id].top=newTop;
+      el.style.left=newLeft+"%"; el.style.top=newTop+"%";
+    }
+    function onUp(){
+      el.removeEventListener('pointermove',onMove);
+    }
+    el.addEventListener('pointermove',onMove);
+    el.addEventListener('pointerup',onUp,{once:true});
+  });
+}
+
+/* ---- Desks ---- */
+function renderDesks(){
+  const box=document.getElementById("desks");
+  box.innerHTML="";
+  Object.values(data).forEach(d=>{
+    const b=document.createElement("button");
+    b.className="desk "+d.state+(mode==='desks'?" editing-mode":"")+(d.id===selectedId?" selected":"");
+    b.dataset.id=d.id;
+    b.style.left=d.left+"%";
+    b.style.top=d.top+"%";
+    b.innerHTML=d.id+"<span class='del' title='Delete desk' onclick=\"event.stopPropagation();deleteDesk('"+d.id+"')\">×</span>";
+    attachDrag(b,d.id,data);
+    b.addEventListener('click',()=>{
+      if(b.dataset.dragged==='1'){b.dataset.dragged='0'; return;}
+      select(d.id);
+    });
+    box.appendChild(b);
+  });
+  updateStats();
+}
+
+function select(id){
+  selectedId=id;
+  selectedLabelId=null;
+  renderDesks(); renderLabels();
+  const x=data[id];
+  const panel=document.getElementById('selected');
+  if(mode==='desks'){
+    panel.innerHTML=
+      "<div class='editrow'><label>Desk ID</label><input value=\""+id+"\" disabled></div>"+
+      "<div class='editrow'><label>Assigned To</label><input value=\""+x.name+"\" oninput=\"data['"+id+"'].name=this.value\"></div>"+
+      "<div class='editrow'><label>Team</label><input value=\""+x.team+"\" oninput=\"data['"+id+"'].team=this.value\"></div>"+
+      "<div class='editrow'><label>Status</label><select onchange=\"data['"+id+"'].state=this.value; renderDesks();\">"+
+        ['available','assigned','occupied','reserved'].map(s=>"<option value='"+s+"'"+(s===x.state?' selected':'')+">"+s+"</option>").join('')+
+      "</select></div>"+
+      "<button class='btn secondary' onclick=\"deleteDesk('"+id+"')\">🗑 Delete Desk</button>";
+  } else {
+    panel.innerHTML="<div class='person'><div class='avatar'>"+initials(x.name)+"</div><div><b>"+x.name+"</b><small>"+x.team+" · "+id+"</small></div></div><div class='row'><span>Status</span><b>"+x.state+"</b></div><div class='row'><span>Floor</span><b>Floor 2</b></div><div class='row'><span>Equipment</span><b>Monitor + Dock</b></div><button class='btn primary'>"+(x.state==="available"?"Book this workspace":"View details")+"</button>";
+  }
+}
+
+function deleteDesk(id){
+  delete data[id];
+  if(selectedId===id){
+    selectedId=null;
+    document.getElementById('selected').innerHTML='Click a desk on the map.';
+  }
+  renderDesks();
+}
+
+function addDesk(){
+  let n=1;
+  while(data['N-'+String(n).padStart(2,'0')]) n++;
+  const id='N-'+String(n).padStart(2,'0');
+  data[id]={id,name:'Unassigned',team:'Unassigned',state:'available',left:45,top:45};
+  renderDesks();
+  select(id);
+}
+
+/* ---- Labels ---- */
+function renderLabels(){
+  const box=document.getElementById('labels');
+  box.innerHTML='';
+  Object.values(labels).forEach(l=>{
+    const el=document.createElement('div');
+    el.className='maplabel'+(mode==='desks'?' editing-mode':'')+(l.id===selectedLabelId?' selected':'');
+    el.dataset.id=l.id;
+    el.style.left=l.left+'%';
+    el.style.top=l.top+'%';
+    el.innerHTML=l.text+"<span class='del' title='Delete label' onclick=\"event.stopPropagation();deleteLabel('"+l.id+"')\">×</span>";
+    attachDrag(el,l.id,labels);
+    el.addEventListener('click',()=>{
+      if(el.dataset.dragged==='1'){el.dataset.dragged='0'; return;}
+      selectLabel(l.id);
+    });
+    box.appendChild(el);
+  });
+}
+
+function selectLabel(id){
+  selectedLabelId=id;
+  selectedId=null;
+  renderDesks(); renderLabels();
+  if(mode!=='desks') return;
+  const l=labels[id];
+  const panel=document.getElementById('selected');
+  panel.innerHTML=
+    "<div class='editrow'><label>Label Text</label><input value=\""+l.text+"\" oninput=\"labels['"+id+"'].text=this.value; renderLabels();\"></div>"+
+    "<button class='btn secondary' onclick=\"deleteLabel('"+id+"')\">🗑 Delete Label</button>";
+}
+
+function deleteLabel(id){
+  delete labels[id];
+  if(selectedLabelId===id){
+    selectedLabelId=null;
+    document.getElementById('selected').innerHTML='Click a desk on the map.';
+  }
+  renderLabels();
+}
+
+function addLabel(){
+  let n=1;
+  while(labels['label-'+n]) n++;
+  const id='label-'+n;
+  labels[id]={id,text:'New Label',left:45,top:45};
+  renderLabels();
+  selectLabel(id);
+}
+
+/* ---- Modes / persistence / misc ---- */
+function setMode(target){
+  mode = (mode===target) ? 'view' : target;
+  const floorEl=document.getElementById('floorEl');
+  floorEl.classList.toggle('editing', mode==='desks');
+  document.getElementById('editBtn').textContent = mode==='desks' ? '✓ Done Editing' : '✎ Edit Desks';
+  document.getElementById('editBtn').classList.toggle('active-tool', mode==='desks');
+  document.getElementById('addDeskBtn').style.display = mode==='desks' ? 'inline-block' : 'none';
+  document.getElementById('addLabelBtn').style.display = mode==='desks' ? 'inline-block' : 'none';
+  document.getElementById('saveBtn').style.display = mode==='desks' ? 'inline-block' : 'none';
+  selectedId=null; selectedLabelId=null;
+  document.getElementById('selected').innerHTML='Click a desk on the map.';
+  renderDesks(); renderLabels();
+}
+
+function saveLayout(){
+  localStorage.setItem('workplaceLayout', JSON.stringify(Object.values(data)));
+  localStorage.setItem('workplaceLabels', JSON.stringify(Object.values(labels)));
+  toast('Layout saved locally — reload the page to confirm it persisted.');
+}
+
+function setBackground(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    document.getElementById('floorEl').style.backgroundImage="url('"+e.target.result+"')";
+    localStorage.setItem('workplaceBackground', e.target.result);
+    toast('Background image applied and saved locally.');
+  };
+  reader.readAsDataURL(file);
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.opacity='1';
+  clearTimeout(t._h);
+  t._h=setTimeout(()=>t.style.opacity='0', 2800);
+}
+
+function search(){
+  const q=document.getElementById("search").value.toLowerCase();
+  for(let id in data){
+    if(id.toLowerCase().includes(q)||data[id].name.toLowerCase().includes(q)||data[id].team.toLowerCase().includes(q)){select(id);break}
+  }
+}
+function floor(x){document.getElementById("title").textContent="Toronto Office · "+x}
+
+const savedBg=localStorage.getItem('workplaceBackground');
+if(savedBg) document.getElementById('floorEl').style.backgroundImage="url('"+savedBg+"')";
+renderDesks();
+renderLabels();
+</script>
+</body>
+</html>
