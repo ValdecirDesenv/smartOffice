@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartoffice
+      POSTGRES_USER: smartoffice
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartoffice"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  core-api:
+    build:
+      context: .
+      dockerfile: core-api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://smartoffice:${POSTGRES_PASSWORD}@postgres:5432/smartoffice
+      UPLOADS_DIR: /data/uploads
+      PORT: 8080
+    volumes:
+      - uploads:/data/uploads
+    ports:
+      - "8090:8080"
+    networks: [internal]
+
+  # Dev-only: Vite dev server with hot reload, proxying /api and /uploads to core-api.
+  # Not part of the production image (core-api serves the built frontend directly on :8090).
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on: [core-api]
+    environment:
+      VITE_API_PROXY_TARGET: http://core-api:8080
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "5174:5173"
+    networks: [internal]
+
+  backup:
+    image: prodrigestivill/postgres-backup-local
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: smartoffice
+      POSTGRES_USER: smartoffice
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+    volumes:
+      - pgbackups:/backups
+    networks: [internal]
+
+volumes:
+  pgdata:
+  uploads:
+  pgbackups:
+  frontend_node_modules:
+
+networks:
+  internal:

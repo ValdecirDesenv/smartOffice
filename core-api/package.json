@@ -1,0 +1,31 @@
+{
+  "name": "smartoffice-core-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SmartOffice core API - Node.js/TypeScript backend serving the frontend build and REST API",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "migrate:up": "node-pg-migrate up -m src/db/migrations -j js",
+    "migrate:down": "node-pg-migrate down -m src/db/migrations -j js",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fastify/multipart": "^9.0.0",
+    "@fastify/static": "^8.0.0",
+    "fastify": "^5.0.0",
+    "node-pg-migrate": "^7.6.0",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}
