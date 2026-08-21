@@ -6,6 +6,7 @@ import TopBar from '../components/TopBar';
 import FloorMapCanvas from '../components/FloorMap/FloorMapCanvas';
 import BackgroundUpload from '../components/FloorMap/BackgroundUpload';
 import WorkspaceDetailPanel from '../components/FloorMap/WorkspaceDetailPanel';
+import DeviceDetailPanel from '../components/FloorMap/DeviceDetailPanel';
 import LabelEditor from '../components/FloorMap/LabelEditor';
 
 export default function FloorMapPage() {
@@ -23,6 +24,7 @@ export default function FloorMapPage() {
   const [editing, setEditing] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [newSiteName, setNewSiteName] = useState('');
   const [newFloorName, setNewFloorName] = useState('');
@@ -31,6 +33,7 @@ export default function FloorMapPage() {
   // PUT requests resolve out of order, so a stale response must not clobber a newer one's result.
   const workspaceMoveSeq = useRef<Map<string, number>>(new Map());
   const labelMoveSeq = useRef<Map<string, number>>(new Map());
+  const deviceMoveSeq = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     api.workspaceTypes.list().then(setWorkspaceTypes);
@@ -65,8 +68,15 @@ export default function FloorMapPage() {
     reloadFloorData();
     setSelectedWorkspaceId(null);
     setSelectedLabelId(null);
+    setSelectedDeviceId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFloor]);
+
+  const mapDevices = useMemo(
+    () => (currentFloor ? devices.filter((d) => d.floor_id === currentFloor.id) : []),
+    [devices, currentFloor]
+  );
+  const selectedDevice = mapDevices.find((d) => d.id === selectedDeviceId) ?? null;
 
   const filteredWorkspaces = useMemo(() => {
     if (!search.trim()) return workspaces;
@@ -78,6 +88,33 @@ export default function FloorMapPage() {
       return employee?.name.toLowerCase().includes(q) ?? false;
     });
   }, [workspaces, search, assignments, employees]);
+
+  const employeeWorkspace = useMemo(() => {
+    const map = new Map<string, Workspace>();
+    for (const a of assignments) {
+      const w = workspaces.find((x) => x.id === a.workspace_id);
+      if (w) map.set(a.employee_id, w);
+    }
+    return map;
+  }, [assignments, workspaces]);
+
+  const peopleMatches = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    return employees
+      .filter((e) => e.name.toLowerCase().includes(q))
+      .slice(0, 8)
+      .map((e) => ({ employee: e, workspace: employeeWorkspace.get(e.id) ?? null }));
+  }, [search, employees, employeeWorkspace]);
+
+  function handleSelectPerson(employeeId: string) {
+    const w = employeeWorkspace.get(employeeId);
+    setSearch('');
+    if (w) {
+      setSelectedWorkspaceId(w.id);
+      setSelectedLabelId(null);
+    }
+  }
 
   const stats = useMemo(
     () => ({
@@ -168,6 +205,44 @@ export default function FloorMapPage() {
     setLabels((prev) => prev.map((x) => (x.id === id ? updated : x)));
   }
 
+  async function handleMoveDevice(id: string, posX: number, posY: number) {
+    const d = devices.find((x) => x.id === id);
+    if (!d) return;
+    const seq = (deviceMoveSeq.current.get(id) ?? 0) + 1;
+    deviceMoveSeq.current.set(id, seq);
+    const updated = await api.devices.update(id, { ...d, pos_x: posX, pos_y: posY });
+    if (deviceMoveSeq.current.get(id) !== seq) return;
+    setDevices((prev) => prev.map((x) => (x.id === id ? updated : x)));
+  }
+
+  async function handleUpdateMapDevice(patch: Partial<Device>) {
+    if (!selectedDevice) return;
+    const updated = await api.devices.update(selectedDevice.id, { ...selectedDevice, ...patch });
+    setDevices((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+  }
+
+  async function handleDeleteMapDevice() {
+    if (!selectedDevice) return;
+    await api.devices.remove(selectedDevice.id);
+    setDevices((prev) => prev.filter((x) => x.id !== selectedDevice.id));
+    setSelectedDeviceId(null);
+  }
+
+  async function handleAddMapDevice() {
+    if (!currentFloor || !currentSite || !deviceTypes[0]) return;
+    const created = await api.devices.create({
+      site_id: currentSite.id,
+      floor_id: currentFloor.id,
+      device_type_id: deviceTypes[0].id,
+      pos_x: 45,
+      pos_y: 45,
+    });
+    setDevices((prev) => [...prev, created]);
+    setSelectedDeviceId(created.id);
+    setSelectedWorkspaceId(null);
+    setSelectedLabelId(null);
+  }
+
   async function handleUpdateWorkspace(patch: Partial<Workspace>) {
     if (!selectedWorkspace) return;
     const updated = await api.workspaces.update(selectedWorkspace.id, { ...selectedWorkspace, ...patch });
@@ -184,6 +259,14 @@ export default function FloorMapPage() {
   async function handleAssign(employeeId: string) {
     if (!selectedWorkspace) return;
     await api.assignments.create({ workspace_id: selectedWorkspace.id, employee_id: employeeId });
+    await reloadFloorData();
+  }
+
+  async function handleCreateAndAssign(name: string) {
+    if (!selectedWorkspace || !currentSite) return;
+    const created = await api.employees.create({ site_id: currentSite.id, name });
+    setEmployees((prev) => [...prev, created]);
+    await api.assignments.create({ workspace_id: selectedWorkspace.id, employee_id: created.id });
     await reloadFloorData();
   }
 
@@ -250,7 +333,7 @@ export default function FloorMapPage() {
 
   return (
     <>
-      <TopBar search={search} onSearchChange={setSearch} />
+      <TopBar search={search} onSearchChange={setSearch} peopleMatches={peopleMatches} onSelectPerson={handleSelectPerson} />
       <div className={`grid gap-5 p-6 ${editing ? 'grid-cols-[1fr_300px]' : 'grid-cols-1'}`}>
         <div>
           <h1 className="text-2xl font-bold">
@@ -287,6 +370,9 @@ export default function FloorMapPage() {
                   <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddLabel}>
                     🏷 Add Label
                   </button>
+                  <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddMapDevice}>
+                    📺 Add Device
+                  </button>
                 </>
               )}
             </div>
@@ -296,18 +382,28 @@ export default function FloorMapPage() {
               editing={editing}
               workspaces={filteredWorkspaces}
               labels={labels}
+              mapDevices={mapDevices}
               selectedWorkspaceId={selectedWorkspaceId}
               selectedLabelId={selectedLabelId}
+              selectedDeviceId={selectedDeviceId}
               onSelectWorkspace={(id) => {
                 setSelectedWorkspaceId((prev) => (prev === id ? null : id));
                 setSelectedLabelId(null);
+                setSelectedDeviceId(null);
               }}
               onSelectLabel={(id) => {
                 setSelectedLabelId((prev) => (prev === id ? null : id));
                 setSelectedWorkspaceId(null);
+                setSelectedDeviceId(null);
+              }}
+              onSelectDevice={(id) => {
+                setSelectedDeviceId((prev) => (prev === id ? null : id));
+                setSelectedWorkspaceId(null);
+                setSelectedLabelId(null);
               }}
               onMoveWorkspace={handleMoveWorkspace}
               onMoveLabel={handleMoveLabel}
+              onMoveDevice={handleMoveDevice}
               workspaceTypes={workspaceTypes}
               deviceTypes={deviceTypes}
               selectedWorkspaceEmployee={assignedEmployee}
@@ -337,13 +433,22 @@ export default function FloorMapPage() {
                 onUpdate={handleUpdateWorkspace}
                 onDelete={handleDeleteWorkspace}
                 onAssign={handleAssign}
+                onCreateAndAssign={handleCreateAndAssign}
                 onUnassign={handleUnassign}
                 onAddDevice={handleAddDevice}
                 onRemoveDevice={handleRemoveDevice}
               />
             )}
             {selectedLabel && <LabelEditor label={selectedLabel} onUpdate={handleUpdateLabel} onDelete={handleDeleteLabel} />}
-            {!selectedWorkspace && !selectedLabel && (
+            {selectedDevice && (
+              <DeviceDetailPanel
+                device={selectedDevice}
+                deviceTypes={deviceTypes}
+                onUpdate={handleUpdateMapDevice}
+                onDelete={handleDeleteMapDevice}
+              />
+            )}
+            {!selectedWorkspace && !selectedLabel && !selectedDevice && (
               <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
                 Click a desk on the map.
               </div>

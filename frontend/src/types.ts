@@ -69,12 +69,16 @@ export interface Device {
   id: string;
   site_id: string;
   workspace_id: string | null;
+  floor_id: string | null;
+  pos_x: number | string | null;
+  pos_y: number | string | null;
   device_type_id: string;
   name: string | null;
   serial_number: string | null;
   asset_tag: string | null;
   mac_address: string | null;
   status: DeviceStatus;
+  rotated: boolean;
 }
 
 export interface WorkspaceAssignment {

@@ -102,8 +102,11 @@ export const api = {
     list: () => request<DeviceType[]>('GET', '/api/device-types'),
   },
   devices: {
-    list: (params: { siteId?: string; workspaceId?: string } = {}) =>
-      request<Device[]>('GET', `/api/devices${query({ site_id: params.siteId, workspace_id: params.workspaceId })}`),
+    list: (params: { siteId?: string; workspaceId?: string; floorId?: string } = {}) =>
+      request<Device[]>(
+        'GET',
+        `/api/devices${query({ site_id: params.siteId, workspace_id: params.workspaceId, floor_id: params.floorId })}`
+      ),
     create: (data: Partial<Device>) => request<Device>('POST', '/api/devices', data),
     update: (id: string, data: Partial<Device>) => request<Device>('PUT', `/api/devices/${id}`, data),
     remove: (id: string) => request<void>('DELETE', `/api/devices/${id}`),

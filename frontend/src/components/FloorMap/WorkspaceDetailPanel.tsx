@@ -13,6 +13,7 @@ interface WorkspaceDetailPanelProps {
   onUpdate: (patch: Partial<Workspace>) => void;
   onDelete: () => void;
   onAssign: (employeeId: string) => void;
+  onCreateAndAssign: (name: string) => Promise<void>;
   onUnassign: () => void;
   onAddDevice: (deviceTypeId: string, name: string) => void;
   onRemoveDevice: (deviceId: string) => void;
@@ -28,12 +29,19 @@ export default function WorkspaceDetailPanel({
   onUpdate,
   onDelete,
   onAssign,
+  onCreateAndAssign,
   onUnassign,
   onAddDevice,
   onRemoveDevice,
 }: WorkspaceDetailPanelProps) {
   const [newDeviceTypeId, setNewDeviceTypeId] = useState(deviceTypes[0]?.id ?? '');
   const [newDeviceName, setNewDeviceName] = useState('');
+  const [newEmployeeName, setNewEmployeeName] = useState('');
+  const employeeMatches = newEmployeeName.trim()
+    ? unassignedEmployees
+        .filter((e) => e.name.toLowerCase().includes(newEmployeeName.trim().toLowerCase()))
+        .slice(0, 8)
+    : [];
   const [posXText, setPosXText] = useState(String(workspace.pos_x ?? 0));
   const [posYText, setPosYText] = useState(String(workspace.pos_y ?? 0));
   const xFocused = useRef(false);
@@ -48,6 +56,7 @@ export default function WorkspaceDetailPanel({
     yFocused.current = false;
     setPosXText(String(workspace.pos_x ?? 0));
     setPosYText(String(workspace.pos_y ?? 0));
+    setNewEmployeeName('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
@@ -158,20 +167,51 @@ export default function WorkspaceDetailPanel({
             </button>
           </div>
         ) : (
-          <select
-            className="w-full rounded-md border border-slate-300 px-2.5 py-2 text-sm"
-            defaultValue=""
-            onChange={(e) => e.target.value && onAssign(e.target.value)}
-          >
-            <option value="" disabled>
-              Select an employee…
-            </option>
-            {unassignedEmployees.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              className="w-full rounded-md border border-slate-300 px-2.5 py-2 text-sm"
+              placeholder="Search employees…"
+              value={newEmployeeName}
+              onChange={(e) => setNewEmployeeName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setNewEmployeeName('');
+                if (e.key === 'Enter' && employeeMatches.length === 0 && newEmployeeName.trim()) {
+                  onCreateAndAssign(newEmployeeName.trim());
+                  setNewEmployeeName('');
+                }
+              }}
+            />
+            {newEmployeeName.trim() && (
+              <ul className="absolute left-0 top-full z-20 mt-1 w-full rounded-md border border-slate-200 bg-white py-1 text-sm shadow-lg">
+                {employeeMatches.map((e) => (
+                  <li key={e.id}>
+                    <button
+                      className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        onAssign(e.id);
+                        setNewEmployeeName('');
+                      }}
+                    >
+                      {e.name}
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <button
+                    className="block w-full px-3 py-1.5 text-left text-blue-600 hover:bg-slate-50"
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      onCreateAndAssign(newEmployeeName.trim());
+                      setNewEmployeeName('');
+                    }}
+                  >
+                    + Add "{newEmployeeName.trim()}" as new employee
+                  </button>
+                </li>
+              </ul>
+            )}
+          </div>
         )}
       </div>
 

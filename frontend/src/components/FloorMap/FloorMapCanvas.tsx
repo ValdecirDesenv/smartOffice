@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Device, DeviceType, Employee, Label, Team, Workspace, WorkspaceType } from '../../types';
 import WorkspaceInfoPopover from './WorkspaceInfoPopover';
+import DeviceInfoPopover from './DeviceInfoPopover';
 
 const STATUS_STYLES: Record<string, string> = {
   available: 'bg-emerald-100 border-emerald-500 text-emerald-800',
@@ -10,11 +11,22 @@ const STATUS_STYLES: Record<string, string> = {
   inactive: 'bg-slate-200 border-slate-400 text-slate-500',
 };
 
+const DEVICE_ICONS: Record<string, string> = {
+  tv: '📺',
+  printer: '🖨️',
+  monitor: '🖥️',
+  dock: '🔌',
+  laptop: '💻',
+  phone: '☎️',
+  ipad: '📱',
+  other: '📦',
+};
+
 function clamp(v: number, a: number, b: number) {
   return Math.max(a, Math.min(b, v));
 }
 
-// Pixel distance within which a dragged desk/label snaps to align with another one.
+// Pixel distance within which a dragged desk/label/device snaps to align with another one.
 const SNAP_PX = 8;
 
 function closestWithin(value: number, candidates: number[], thresholdPercent: number): number | null {
@@ -29,6 +41,8 @@ function closestWithin(value: number, candidates: number[], thresholdPercent: nu
   }
   return best;
 }
+
+type MarkerKind = 'workspace' | 'label' | 'device';
 
 interface DragTarget {
   id: string;
@@ -46,12 +60,16 @@ interface FloorMapCanvasProps {
   editing: boolean;
   workspaces: Workspace[];
   labels: Label[];
+  mapDevices: Device[];
   selectedWorkspaceId: string | null;
   selectedLabelId: string | null;
+  selectedDeviceId: string | null;
   onSelectWorkspace: (id: string) => void;
   onSelectLabel: (id: string) => void;
+  onSelectDevice: (id: string) => void;
   onMoveWorkspace: (id: string, posX: number, posY: number) => void;
   onMoveLabel: (id: string, posX: number, posY: number) => void;
+  onMoveDevice: (id: string, posX: number, posY: number) => void;
   workspaceTypes: WorkspaceType[];
   deviceTypes: DeviceType[];
   selectedWorkspaceEmployee: Employee | null;
@@ -66,12 +84,16 @@ export default function FloorMapCanvas({
   editing,
   workspaces,
   labels,
+  mapDevices,
   selectedWorkspaceId,
   selectedLabelId,
+  selectedDeviceId,
   onSelectWorkspace,
   onSelectLabel,
+  onSelectDevice,
   onMoveWorkspace,
   onMoveLabel,
+  onMoveDevice,
   workspaceTypes,
   deviceTypes,
   selectedWorkspaceEmployee,
@@ -80,35 +102,43 @@ export default function FloorMapCanvas({
 }: FloorMapCanvasProps) {
   const floorRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragTarget | null>(null);
-  const dragKindRef = useRef<'workspace' | 'label' | null>(null);
+  const dragKindRef = useRef<MarkerKind | null>(null);
   const vGuideRef = useRef<HTMLDivElement>(null);
   const hGuideRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
 
-  // Popover anchor: recomputed whenever the selected desk (or its position) changes, in view mode only.
+  const selectedMarker: { kind: 'workspace' | 'device'; id: string } | null = selectedWorkspaceId
+    ? { kind: 'workspace', id: selectedWorkspaceId }
+    : selectedDeviceId
+      ? { kind: 'device', id: selectedDeviceId }
+      : null;
+
+  // Popover anchor: recomputed whenever the selected desk/device (or its position) changes, view mode only.
   useEffect(() => {
-    if (editing || !selectedWorkspaceId) {
+    if (editing || !selectedMarker) {
       setAnchorRect(null);
       return;
     }
-    const el = document.getElementById(`workspace-${selectedWorkspaceId}`);
+    const el = document.getElementById(`${selectedMarker.kind}-${selectedMarker.id}`);
     setAnchorRect(el ? el.getBoundingClientRect() : null);
-  }, [editing, selectedWorkspaceId, workspaces]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, selectedMarker?.kind, selectedMarker?.id, workspaces, mapDevices]);
 
-  // Clicking anywhere outside the popover and outside any desk/label closes it (desk/label clicks
-  // are already handled by their own pointerup->onSelectWorkspace/onSelectLabel toggle).
+  // Clicking anywhere outside the popover and outside any desk/label/device closes it (their own
+  // pointerup->onSelect* toggle already handles clicks on the markers themselves).
   useEffect(() => {
-    if (editing || !selectedWorkspaceId) return;
+    if (editing || !selectedMarker) return;
     function onPointerDownOutside(e: PointerEvent) {
       const target = e.target as HTMLElement;
       if (popoverRef.current?.contains(target)) return;
-      if (target.closest('[id^="workspace-"], [id^="label-"]')) return;
-      onSelectWorkspace(selectedWorkspaceId as string);
+      if (target.closest('[id^="workspace-"], [id^="label-"], [id^="device-"]')) return;
+      if (selectedMarker!.kind === 'workspace') onSelectWorkspace(selectedMarker!.id);
+      else onSelectDevice(selectedMarker!.id);
     }
     window.addEventListener('pointerdown', onPointerDownOutside, true);
     return () => window.removeEventListener('pointerdown', onPointerDownOutside, true);
-  }, [editing, selectedWorkspaceId, onSelectWorkspace]);
+  }, [editing, selectedMarker, onSelectWorkspace, onSelectDevice]);
 
   function popoverStyle(rect: DOMRect): React.CSSProperties {
     const estimatedHeight = 220;
@@ -133,18 +163,18 @@ export default function FloorMapCanvas({
 
   // Tracks the position intended by the nudges issued so far for the current selection. Holding an
   // arrow key fires keydown faster than the PUT round-trip resolves, so building the next step from
-  // the (possibly stale) workspaces/labels prop would drop presses; this always builds on the last
-  // value WE sent, regardless of whether its response has come back yet.
+  // the (possibly stale) workspaces/labels/devices prop would drop presses; this always builds on the
+  // last value WE sent, regardless of whether its response has come back yet.
   const lastNudgeRef = useRef<{ id: string; x: number; y: number } | null>(null);
   useEffect(() => {
     lastNudgeRef.current = null;
-  }, [selectedWorkspaceId, selectedLabelId]);
+  }, [selectedWorkspaceId, selectedLabelId, selectedDeviceId]);
 
-  // Nudges the selected desk/label with the arrow keys while editing — a normal press moves ~1px,
-  // Shift+press moves ~10px, converted to percent using the floor's current on-screen size so the
-  // feel stays consistent regardless of canvas width.
+  // Nudges the selected desk/label/device with the arrow keys while editing — a normal press moves
+  // ~1px, Shift+press moves ~10px, converted to percent using the floor's current on-screen size so
+  // the feel stays consistent regardless of canvas width.
   useEffect(() => {
-    if (!editing || (!selectedWorkspaceId && !selectedLabelId)) return;
+    if (!editing || (!selectedWorkspaceId && !selectedLabelId && !selectedDeviceId)) return;
 
     function onKeyDown(e: KeyboardEvent) {
       const dir = ARROW_DELTAS[e.key];
@@ -160,9 +190,9 @@ export default function FloorMapCanvas({
       const dyPercent = (dir[1] * pxStep) / rect.height * 100;
       e.preventDefault();
 
-      const selectedId = selectedWorkspaceId ?? selectedLabelId;
+      const selectedId = selectedWorkspaceId ?? selectedLabelId ?? selectedDeviceId;
       if (!selectedId) return;
-      const items = selectedWorkspaceId ? workspaces : labels;
+      const items = selectedWorkspaceId ? workspaces : selectedLabelId ? labels : mapDevices;
       const current = items.find((x) => x.id === selectedId);
       if (!current) return;
 
@@ -175,14 +205,26 @@ export default function FloorMapCanvas({
       lastNudgeRef.current = { id: selectedId, x: newX, y: newY };
 
       if (selectedWorkspaceId) onMoveWorkspace(selectedId, newX, newY);
-      else onMoveLabel(selectedId, newX, newY);
+      else if (selectedLabelId) onMoveLabel(selectedId, newX, newY);
+      else onMoveDevice(selectedId, newX, newY);
     }
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editing, selectedWorkspaceId, selectedLabelId, workspaces, labels, onMoveWorkspace, onMoveLabel]);
+  }, [
+    editing,
+    selectedWorkspaceId,
+    selectedLabelId,
+    selectedDeviceId,
+    workspaces,
+    labels,
+    mapDevices,
+    onMoveWorkspace,
+    onMoveLabel,
+    onMoveDevice,
+  ]);
 
-  function startDrag(kind: 'workspace' | 'label', id: string, posX: number, posY: number) {
+  function startDrag(kind: MarkerKind, id: string, posX: number, posY: number) {
     return (e: React.PointerEvent) => {
       // Always tracked, even outside editing: onPointerUp needs this to recognize a plain click
       // (for the view-mode info popover) as distinct from a drag, which onPointerMove gates on editing.
@@ -204,7 +246,7 @@ export default function FloorMapCanvas({
     let newLeft = clamp(drag.startLeft + (dx / rect.width) * 100, 0, 95);
     let newTop = clamp(drag.startTop + (dy / rect.height) * 100, 0, 93);
 
-    // Snap to other desks/labels when close, and show a guide line along the matched axis.
+    // Snap to other desks/labels/devices when close, and show a guide line along the matched axis.
     const thresholdX = (SNAP_PX / rect.width) * 100;
     const thresholdY = (SNAP_PX / rect.height) * 100;
     const otherX: number[] = [];
@@ -218,6 +260,11 @@ export default function FloorMapCanvas({
       if (dragKindRef.current === 'label' && l.id === drag.id) continue;
       otherX.push(Number(l.pos_x ?? 0));
       otherY.push(Number(l.pos_y ?? 0));
+    }
+    for (const d of mapDevices) {
+      if (dragKindRef.current === 'device' && d.id === drag.id) continue;
+      otherX.push(Number(d.pos_x ?? 0));
+      otherY.push(Number(d.pos_y ?? 0));
     }
     const snappedX = closestWithin(newLeft, otherX, thresholdX);
     const snappedY = closestWithin(newTop, otherY, thresholdY);
@@ -251,10 +298,12 @@ export default function FloorMapCanvas({
     if (!drag) return;
     if (editing && drag.dragged && drag.currentLeft !== undefined && drag.currentTop !== undefined) {
       if (kind === 'workspace') onMoveWorkspace(drag.id, drag.currentLeft, drag.currentTop);
-      else onMoveLabel(drag.id, drag.currentLeft, drag.currentTop);
+      else if (kind === 'label') onMoveLabel(drag.id, drag.currentLeft, drag.currentTop);
+      else onMoveDevice(drag.id, drag.currentLeft, drag.currentTop);
     } else {
       if (kind === 'workspace') onSelectWorkspace(drag.id);
-      else onSelectLabel(drag.id);
+      else if (kind === 'label') onSelectLabel(drag.id);
+      else onSelectDevice(drag.id);
     }
   }
 
@@ -309,11 +358,56 @@ export default function FloorMapCanvas({
             {l.text}
           </div>
         ))}
+
+        {mapDevices.map((d) => {
+          const deviceType = deviceTypes.find((t) => t.id === d.device_type_id);
+          const code = deviceType?.code ?? 'other';
+          const dim = d.status !== 'active';
+          const commonProps = {
+            key: d.id,
+            id: `device-${d.id}`,
+            onPointerDown: startDrag('device', d.id, Number(d.pos_x ?? 0), Number(d.pos_y ?? 0)),
+            style: { left: `${d.pos_x ?? 0}%`, top: `${d.pos_y ?? 0}%` },
+          };
+
+          // TVs get the same named-label treatment as desks, but as a wide landscape rectangle
+          // (rather than square) so a name like "TV-Boardroom" fits on one line, sized to be a
+          // bigger, more prominent fixture than the small icon-only circle other devices use.
+          if (code === 'tv') {
+            return (
+              <button
+                {...commonProps}
+                title={d.name ?? undefined}
+                className={`absolute flex items-center justify-center overflow-hidden whitespace-nowrap rounded border-2 bg-white px-2 text-center font-bold leading-none ${
+                  editing ? 'h-7 w-24 text-[9px]' : 'h-9 w-32 text-[11px]'
+                } ${d.rotated ? 'rotate-90' : ''} ${dim ? 'border-red-400 opacity-60' : 'border-slate-500'} ${
+                  editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-125'
+                } ${d.id === selectedDeviceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
+              >
+                {d.name || deviceType?.label || 'TV'}
+              </button>
+            );
+          }
+
+          return (
+            <button
+              {...commonProps}
+              title={d.name ?? undefined}
+              className={`absolute flex items-center justify-center rounded-full border-2 bg-white leading-none ${
+                editing ? 'h-6 w-6 text-[11px]' : 'h-8 w-8 text-sm'
+              } ${dim ? 'border-red-400 opacity-60' : 'border-slate-400'} ${
+                editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-150'
+              } ${d.id === selectedDeviceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
+            >
+              {DEVICE_ICONS[code] ?? '📦'}
+            </button>
+          );
+        })}
       </div>
 
-      {!editing && anchorRect && selectedWorkspaceId && (
+      {!editing && anchorRect && selectedMarker && selectedMarker.kind === 'workspace' && (
         (() => {
-          const w = workspaces.find((x) => x.id === selectedWorkspaceId);
+          const w = workspaces.find((x) => x.id === selectedMarker!.id);
           if (!w) return null;
           return (
             <div ref={popoverRef}>
@@ -325,7 +419,24 @@ export default function FloorMapCanvas({
                 devices={selectedWorkspaceDevices}
                 deviceTypes={deviceTypes}
                 style={popoverStyle(anchorRect)}
-                onClose={() => onSelectWorkspace(selectedWorkspaceId)}
+                onClose={() => onSelectWorkspace(selectedMarker!.id)}
+              />
+            </div>
+          );
+        })()
+      )}
+
+      {!editing && anchorRect && selectedMarker && selectedMarker.kind === 'device' && (
+        (() => {
+          const d = mapDevices.find((x) => x.id === selectedMarker!.id);
+          if (!d) return null;
+          return (
+            <div ref={popoverRef}>
+              <DeviceInfoPopover
+                device={d}
+                deviceType={deviceTypes.find((t) => t.id === d.device_type_id) ?? null}
+                style={popoverStyle(anchorRect)}
+                onClose={() => onSelectDevice(selectedMarker!.id)}
               />
             </div>
           );

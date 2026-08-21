@@ -12,12 +12,16 @@ const bodySchema = {
   properties: {
     site_id: { type: 'integer' },
     workspace_id: { type: ['integer', 'null'] },
+    floor_id: { type: ['integer', 'null'] },
+    pos_x: { type: ['number', 'null'] },
+    pos_y: { type: ['number', 'null'] },
     device_type_id: { type: 'integer' },
-    name: { type: 'string' },
-    serial_number: { type: 'string' },
-    asset_tag: { type: 'string' },
-    mac_address: { type: 'string' },
+    name: { type: ['string', 'null'] },
+    serial_number: { type: ['string', 'null'] },
+    asset_tag: { type: ['string', 'null'] },
+    mac_address: { type: ['string', 'null'] },
     status: { type: 'string', enum: STATUSES },
+    rotated: { type: 'boolean' },
   },
   additionalProperties: false,
 } as const;
@@ -25,17 +29,25 @@ const bodySchema = {
 interface DeviceBody {
   site_id: number;
   workspace_id?: number;
+  floor_id?: number | null;
+  pos_x?: number | null;
+  pos_y?: number | null;
   device_type_id: number;
-  name?: string;
-  serial_number?: string;
-  asset_tag?: string;
-  mac_address?: string;
+  name?: string | null;
+  serial_number?: string | null;
+  asset_tag?: string | null;
+  mac_address?: string | null;
   status?: string;
+  rotated?: boolean;
 }
 
 const devicesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/', async (request) => {
-    const { site_id, workspace_id } = request.query as { site_id?: string; workspace_id?: string };
+    const { site_id, workspace_id, floor_id } = request.query as {
+      site_id?: string;
+      workspace_id?: string;
+      floor_id?: string;
+    };
     const conditions: string[] = [];
     const values: number[] = [];
     if (site_id) {
@@ -45,6 +57,10 @@ const devicesRoutes: FastifyPluginAsync = async (fastify) => {
     if (workspace_id) {
       values.push(Number(workspace_id));
       conditions.push(`workspace_id = $${values.length}`);
+    }
+    if (floor_id) {
+      values.push(Number(floor_id));
+      conditions.push(`floor_id = $${values.length}`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(`SELECT * FROM devices ${where} ORDER BY id`, values);
@@ -63,17 +79,21 @@ const devicesRoutes: FastifyPluginAsync = async (fastify) => {
     const actorId = getActorId(request);
     const row = await withTransaction(async (client) => {
       const { rows } = await client.query(
-        `INSERT INTO devices (site_id, workspace_id, device_type_id, name, serial_number, asset_tag, mac_address, status, last_seen_source, last_seen_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,COALESCE($8,'active'),'manual',now()) RETURNING *`,
+        `INSERT INTO devices (site_id, workspace_id, floor_id, pos_x, pos_y, device_type_id, name, serial_number, asset_tag, mac_address, status, rotated, last_seen_source, last_seen_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,COALESCE($11,'active'),COALESCE($12,false),'manual',now()) RETURNING *`,
         [
           body.site_id,
           body.workspace_id ?? null,
+          body.floor_id ?? null,
+          body.pos_x ?? null,
+          body.pos_y ?? null,
           body.device_type_id,
           body.name ?? null,
           body.serial_number ?? null,
           body.asset_tag ?? null,
           body.mac_address ?? null,
           body.status ?? null,
+          body.rotated ?? null,
         ]
       );
       await recordAudit(client, {
@@ -97,18 +117,22 @@ const devicesRoutes: FastifyPluginAsync = async (fastify) => {
       const { rows: existing } = await client.query('SELECT * FROM devices WHERE id = $1 FOR UPDATE', [id]);
       if (!existing[0]) return null;
       const { rows } = await client.query(
-        `UPDATE devices SET site_id=$1, workspace_id=$2, device_type_id=$3, name=$4, serial_number=$5,
-           asset_tag=$6, mac_address=$7, status=COALESCE($8, status),
-           last_seen_source='manual', last_seen_at=now(), updated_at=now() WHERE id=$9 RETURNING *`,
+        `UPDATE devices SET site_id=$1, workspace_id=$2, floor_id=$3, pos_x=$4, pos_y=$5, device_type_id=$6, name=$7, serial_number=$8,
+           asset_tag=$9, mac_address=$10, status=COALESCE($11, status), rotated=COALESCE($12, rotated),
+           last_seen_source='manual', last_seen_at=now(), updated_at=now() WHERE id=$13 RETURNING *`,
         [
           body.site_id,
           body.workspace_id ?? null,
+          body.floor_id ?? null,
+          body.pos_x ?? null,
+          body.pos_y ?? null,
           body.device_type_id,
           body.name ?? null,
           body.serial_number ?? null,
           body.asset_tag ?? null,
           body.mac_address ?? null,
           body.status ?? null,
+          body.rotated ?? null,
           id,
         ]
       );
