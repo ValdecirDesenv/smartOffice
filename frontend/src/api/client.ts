@@ -9,6 +9,7 @@ import type {
   DeviceType,
   Device,
   WorkspaceAssignment,
+  User,
 } from '../types';
 
 export class ApiError extends Error {
@@ -110,6 +111,24 @@ export const api = {
     create: (data: Partial<Device>) => request<Device>('POST', '/api/devices', data),
     update: (id: string, data: Partial<Device>) => request<Device>('PUT', `/api/devices/${id}`, data),
     remove: (id: string) => request<void>('DELETE', `/api/devices/${id}`),
+  },
+  auth: {
+    login: (username: string, password: string) => request<User>('POST', '/api/auth/login', { username, password }),
+    logout: () => request<void>('POST', '/api/auth/logout'),
+    me: () => request<User>('GET', '/api/auth/me'),
+    forgotPassword: (email: string) => request<{ ok: true }>('POST', '/api/auth/forgot-password', { email }),
+    resetPassword: (token: string, password: string) =>
+      request<{ ok: true }>('POST', '/api/auth/reset-password', { token, password }),
+    getInvite: (token: string) => request<{ email: string }>('GET', `/api/auth/invites/${token}`),
+    acceptInvite: (token: string, username: string, password: string) =>
+      request<User>('POST', '/api/auth/accept-invite', { token, username, password }),
+  },
+  users: {
+    list: () => request<User[]>('GET', '/api/users'),
+    invite: (email: string, canEdit: boolean = true) =>
+      request<{ id: string; email: string }>('POST', '/api/users/invites', { email, canEdit }),
+    updateRole: (id: string, role: 'admin' | 'member' | 'guest') =>
+      request<User>('PATCH', `/api/users/${id}/role`, { role }),
   },
   assignments: {
     list: (params: { workspaceId?: string; employeeId?: string; all?: boolean } = {}) =>

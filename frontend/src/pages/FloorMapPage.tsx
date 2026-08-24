@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { Device, DeviceType, Employee, Label, Team, Workspace, WorkspaceAssignment, WorkspaceType } from '../types';
 import TopBar from '../components/TopBar';
@@ -11,6 +12,7 @@ import LabelEditor from '../components/FloorMap/LabelEditor';
 
 export default function FloorMapPage() {
   const { loading, currentSite, currentFloor, createSite, createFloor, refresh } = useApp();
+  const { canEdit } = useAuth();
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
@@ -143,21 +145,27 @@ export default function FloorMapPage() {
     return (
       <div className="mx-auto max-w-md p-10">
         <h1 className="mb-2 text-xl font-bold">Welcome to SmartOffice</h1>
-        <p className="mb-4 text-sm text-slate-600">No site exists yet. Create the first one to get started.</p>
-        <div className="flex gap-2">
-          <input
-            className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Site name (e.g. Toronto Office)"
-            value={newSiteName}
-            onChange={(e) => setNewSiteName(e.target.value)}
-          />
-          <button
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white"
-            onClick={() => newSiteName.trim() && createSite(newSiteName.trim()).then(() => setNewSiteName(''))}
-          >
-            Create
-          </button>
-        </div>
+        {canEdit ? (
+          <>
+            <p className="mb-4 text-sm text-slate-600">No site exists yet. Create the first one to get started.</p>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Site name (e.g. Toronto Office)"
+                value={newSiteName}
+                onChange={(e) => setNewSiteName(e.target.value)}
+              />
+              <button
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white"
+                onClick={() => newSiteName.trim() && createSite(newSiteName.trim()).then(() => setNewSiteName(''))}
+              >
+                Create
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-600">No site exists yet.</p>
+        )}
       </div>
     );
   }
@@ -166,21 +174,27 @@ export default function FloorMapPage() {
     return (
       <div className="mx-auto max-w-md p-10">
         <h1 className="mb-2 text-xl font-bold">{currentSite.name}</h1>
-        <p className="mb-4 text-sm text-slate-600">This site has no floors yet. Create the first one.</p>
-        <div className="flex gap-2">
-          <input
-            className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Floor name (e.g. Floor 2)"
-            value={newFloorName}
-            onChange={(e) => setNewFloorName(e.target.value)}
-          />
-          <button
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white"
-            onClick={() => newFloorName.trim() && createFloor(newFloorName.trim()).then(() => setNewFloorName(''))}
-          >
-            Create
-          </button>
-        </div>
+        {canEdit ? (
+          <>
+            <p className="mb-4 text-sm text-slate-600">This site has no floors yet. Create the first one.</p>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Floor name (e.g. Floor 2)"
+                value={newFloorName}
+                onChange={(e) => setNewFloorName(e.target.value)}
+              />
+              <button
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white"
+                onClick={() => newFloorName.trim() && createFloor(newFloorName.trim()).then(() => setNewFloorName(''))}
+              >
+                Create
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-600">This site has no floors yet.</p>
+        )}
       </div>
     );
   }
@@ -352,16 +366,18 @@ export default function FloorMapPage() {
 
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="flex flex-wrap gap-2 border-b border-slate-200 p-2.5">
-              <BackgroundUpload floorId={currentFloor.id} onUploaded={refresh} />
+              {canEdit && <BackgroundUpload floorId={currentFloor.id} onUploaded={refresh} />}
               <span className="flex-1" />
-              <button
-                className={`rounded-lg border px-3 py-2 text-sm ${
-                  editing ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white'
-                }`}
-                onClick={() => setEditing((e) => !e)}
-              >
-                {editing ? '✓ Done Editing' : '✎ Edit Desks'}
-              </button>
+              {canEdit && (
+                <button
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    editing ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white'
+                  }`}
+                  onClick={() => setEditing((e) => !e)}
+                >
+                  {editing ? '✓ Done Editing' : '✎ Edit Desks'}
+                </button>
+              )}
               {editing && (
                 <>
                   <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddWorkspace}>

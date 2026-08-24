@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `block rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`;
@@ -11,6 +12,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
+  const { currentUser, canEdit } = useAuth();
   const {
     sites,
     currentSite,
@@ -124,17 +126,24 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       </NavLink>
       <div className="mt-1 block cursor-not-allowed rounded-lg px-3 py-2 text-sm text-slate-600">Bookings (soon)</div>
       <div className="mb-1 block cursor-not-allowed rounded-lg px-3 py-2 text-sm text-slate-600">Analytics (soon)</div>
+      {currentUser?.is_admin && (
+        <NavLink to="/users" className={navLinkClass}>
+          Users
+        </NavLink>
+      )}
 
       <div className="mb-2 mt-6 flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wide text-slate-500">Offices</span>
-        <button
-          className="rounded px-1.5 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-          onClick={() => setAddingSite((v) => !v)}
-          title="Add office"
-          aria-label="Add office"
-        >
-          +
-        </button>
+        {canEdit && (
+          <button
+            className="rounded px-1.5 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            onClick={() => setAddingSite((v) => !v)}
+            title="Add office"
+            aria-label="Add office"
+          >
+            +
+          </button>
+        )}
       </div>
 
       {sites.map((site) => {
@@ -163,22 +172,26 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 >
                   {site.name}
                 </button>
-                <button
-                  className="ml-0.5 hidden shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 group-hover:block"
-                  onClick={() => startEditSite(site.id, site.name)}
-                  title="Rename office"
-                  aria-label="Rename office"
-                >
-                  ✎
-                </button>
-                <button
-                  className="hidden shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-800 hover:text-red-400 group-hover:block"
-                  onClick={() => confirmDeleteSite(site.id, site.name)}
-                  title="Delete office"
-                  aria-label="Delete office"
-                >
-                  🗑
-                </button>
+                {canEdit && (
+                  <>
+                    <button
+                      className="ml-0.5 hidden shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 group-hover:block"
+                      onClick={() => startEditSite(site.id, site.name)}
+                      title="Rename office"
+                      aria-label="Rename office"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      className="hidden shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-800 hover:text-red-400 group-hover:block"
+                      onClick={() => confirmDeleteSite(site.id, site.name)}
+                      title="Delete office"
+                      aria-label="Delete office"
+                    >
+                      🗑
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
@@ -209,51 +222,56 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                       >
                         {floor.name}
                       </button>
-                      <button
-                        className="ml-0.5 hidden shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 group-hover:block"
-                        onClick={() => startEditFloor(floor.id, floor.name)}
-                        title="Rename floor"
-                        aria-label="Rename floor"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        className="hidden shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-800 hover:text-red-400 group-hover:block"
-                        onClick={() => confirmDeleteFloor(floor.id, floor.name)}
-                        title="Delete floor"
-                        aria-label="Delete floor"
-                      >
-                        🗑
-                      </button>
+                      {canEdit && (
+                        <>
+                          <button
+                            className="ml-0.5 hidden shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 group-hover:block"
+                            onClick={() => startEditFloor(floor.id, floor.name)}
+                            title="Rename floor"
+                            aria-label="Rename floor"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            className="hidden shrink-0 rounded px-1.5 text-slate-400 hover:bg-slate-800 hover:text-red-400 group-hover:block"
+                            onClick={() => confirmDeleteFloor(floor.id, floor.name)}
+                            title="Delete floor"
+                            aria-label="Delete floor"
+                          >
+                            🗑
+                          </button>
+                        </>
+                      )}
                     </div>
                   )
                 )}
-                {addingFloor ? (
-                  <div className="mt-1 flex gap-1.5">
-                    <input
-                      autoFocus
-                      className="w-full min-w-0 rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
-                      placeholder="Floor name"
-                      value={newFloorName}
-                      onChange={(e) => setNewFloorName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && submitNewFloor()}
-                    />
+                {canEdit &&
+                  (addingFloor ? (
+                    <div className="mt-1 flex gap-1.5">
+                      <input
+                        autoFocus
+                        className="w-full min-w-0 rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500"
+                        placeholder="Floor name"
+                        value={newFloorName}
+                        onChange={(e) => setNewFloorName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && submitNewFloor()}
+                      />
+                      <button
+                        className="rounded-md bg-blue-600 px-2.5 text-sm text-white"
+                        onClick={submitNewFloor}
+                        aria-label="Create floor"
+                      >
+                        ✓
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      className="rounded-md bg-blue-600 px-2.5 text-sm text-white"
-                      onClick={submitNewFloor}
-                      aria-label="Create floor"
+                      className="mt-1 block w-full rounded-lg px-3 py-1.5 text-left text-xs text-slate-500 hover:bg-slate-800 hover:text-slate-300"
+                      onClick={() => setAddingFloor(true)}
                     >
-                      ✓
+                      + Add floor
                     </button>
-                  </div>
-                ) : (
-                  <button
-                    className="mt-1 block w-full rounded-lg px-3 py-1.5 text-left text-xs text-slate-500 hover:bg-slate-800 hover:text-slate-300"
-                    onClick={() => setAddingFloor(true)}
-                  >
-                    + Add floor
-                  </button>
-                )}
+                  ))}
               </div>
             )}
           </div>

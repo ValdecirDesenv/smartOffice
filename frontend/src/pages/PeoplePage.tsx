@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { Employee, Team } from '../types';
 import EmployeeForm from '../components/People/EmployeeForm';
@@ -7,6 +8,7 @@ import EmployeeTable from '../components/People/EmployeeTable';
 
 export default function PeoplePage() {
   const { currentSite } = useApp();
+  const { canEdit } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
 
@@ -41,20 +43,23 @@ export default function PeoplePage() {
       <h1 className="mb-1 text-2xl font-bold">People</h1>
       <p className="mb-4 text-sm text-slate-500">Employee directory for {currentSite.name}</p>
 
-      <div className="mb-4">
-        <EmployeeForm
-          teams={teams}
-          onCreateTeam={handleCreateTeam}
-          onSubmit={async (data) => {
-            await api.employees.create({ site_id: currentSite.id, ...data });
-            await reload();
-          }}
-        />
-      </div>
+      {canEdit && (
+        <div className="mb-4">
+          <EmployeeForm
+            teams={teams}
+            onCreateTeam={handleCreateTeam}
+            onSubmit={async (data) => {
+              await api.employees.create({ site_id: currentSite.id, ...data });
+              await reload();
+            }}
+          />
+        </div>
+      )}
 
       <EmployeeTable
         employees={employees}
         teams={teams}
+        readOnly={!canEdit}
         onCreateTeam={handleCreateTeam}
         onUpdate={async (id, data) => {
           const emp = employees.find((e) => e.id === id);

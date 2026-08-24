@@ -88,3 +88,12 @@ export interface WorkspaceAssignment {
   assigned_at: string;
   unassigned_at: string | null;
 }
+
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  employee_id: string | null;
+  is_admin: boolean;
+  can_edit: boolean;
+}

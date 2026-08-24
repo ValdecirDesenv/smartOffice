@@ -5,12 +5,13 @@ import EmployeeForm from './EmployeeForm';
 interface EmployeeTableProps {
   employees: Employee[];
   teams: Team[];
+  readOnly?: boolean;
   onUpdate: (id: string, data: { name: string; email: string; job_title: string; team_id: string | null }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onCreateTeam: (name: string) => Promise<Team>;
 }
 
-export default function EmployeeTable({ employees, teams, onUpdate, onDelete, onCreateTeam }: EmployeeTableProps) {
+export default function EmployeeTable({ employees, teams, readOnly = false, onUpdate, onDelete, onCreateTeam }: EmployeeTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
@@ -26,7 +27,7 @@ export default function EmployeeTable({ employees, teams, onUpdate, onDelete, on
       </thead>
       <tbody>
         {employees.map((emp) =>
-          editingId === emp.id ? (
+          !readOnly && editingId === emp.id ? (
             <tr key={emp.id}>
               <td colSpan={5} className="p-2">
                 <EmployeeForm
@@ -48,12 +49,16 @@ export default function EmployeeTable({ employees, teams, onUpdate, onDelete, on
               <td className="px-4 py-2 text-slate-500">{emp.job_title}</td>
               <td className="px-4 py-2 text-slate-500">{teams.find((t) => t.id === emp.team_id)?.name ?? '—'}</td>
               <td className="px-4 py-2 text-right">
-                <button className="mr-3 text-xs text-blue-600" onClick={() => setEditingId(emp.id)}>
-                  Edit
-                </button>
-                <button className="text-xs text-red-600" onClick={() => onDelete(emp.id)}>
-                  Delete
-                </button>
+                {!readOnly && (
+                  <>
+                    <button className="mr-3 text-xs text-blue-600" onClick={() => setEditingId(emp.id)}>
+                      Edit
+                    </button>
+                    <button className="text-xs text-red-600" onClick={() => onDelete(emp.id)}>
+                      Delete
+                    </button>
+                  </>
+                )}
               </td>
             </tr>
           )
