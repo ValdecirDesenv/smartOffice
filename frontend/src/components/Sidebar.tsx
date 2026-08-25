@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import BackgroundUpload from './FloorMap/BackgroundUpload';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `block rounded-lg px-3 py-2 text-sm ${isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'}`;
@@ -26,8 +27,13 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
     createFloor,
     renameFloor,
     deleteFloor,
+    editing,
+    setEditing,
+    floorStats,
+    refresh,
   } = useApp();
 
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [addingSite, setAddingSite] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
@@ -130,6 +136,57 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         <NavLink to="/users" className={navLinkClass}>
           Users
         </NavLink>
+      )}
+
+      {floorStats && currentFloor && (
+        <div className="mt-4 rounded-lg border border-slate-800">
+          <button
+            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-300 hover:bg-slate-800"
+            onClick={() => setDetailsOpen((v) => !v)}
+          >
+            <span>Floor Details</span>
+            <span className="text-slate-500">{detailsOpen ? '▾' : '▸'}</span>
+          </button>
+          {detailsOpen && (
+            <div className="space-y-2 border-t border-slate-800 p-3">
+              <div className="grid grid-cols-2 gap-1.5 text-xs">
+                <div className="rounded-md bg-slate-800 px-2 py-1.5">
+                  <div className="uppercase text-slate-500">Total</div>
+                  <b className="block text-sm text-slate-100">{floorStats.total}</b>
+                </div>
+                <div className="rounded-md bg-slate-800 px-2 py-1.5">
+                  <div className="uppercase text-slate-500">Available</div>
+                  <b className="block text-sm text-slate-100">{floorStats.available}</b>
+                </div>
+                <div className="rounded-md bg-slate-800 px-2 py-1.5">
+                  <div className="uppercase text-slate-500">Occupied</div>
+                  <b className="block text-sm text-slate-100">{floorStats.occupied}</b>
+                </div>
+                <div className="rounded-md bg-slate-800 px-2 py-1.5">
+                  <div className="uppercase text-slate-500">Reserved</div>
+                  <b className="block text-sm text-slate-100">{floorStats.reserved}</b>
+                </div>
+              </div>
+              {canEdit && (
+                <div className="flex flex-col gap-1.5">
+                  <BackgroundUpload
+                    floorId={currentFloor.id}
+                    onUploaded={refresh}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                  />
+                  <button
+                    className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                      editing ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+                    }`}
+                    onClick={() => setEditing(!editing)}
+                  >
+                    {editing ? '✓ Done Editing' : '✎ Edit Desks'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       <div className="mb-2 mt-6 flex items-center justify-between">

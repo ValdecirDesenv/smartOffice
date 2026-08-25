@@ -5,14 +5,30 @@ import { api } from '../api/client';
 import { Device, DeviceType, Employee, Label, Team, Workspace, WorkspaceAssignment, WorkspaceType } from '../types';
 import TopBar from '../components/TopBar';
 import FloorMapCanvas from '../components/FloorMap/FloorMapCanvas';
-import BackgroundUpload from '../components/FloorMap/BackgroundUpload';
 import WorkspaceDetailPanel from '../components/FloorMap/WorkspaceDetailPanel';
 import DeviceDetailPanel from '../components/FloorMap/DeviceDetailPanel';
 import LabelEditor from '../components/FloorMap/LabelEditor';
 
 export default function FloorMapPage() {
-  const { loading, currentSite, currentFloor, createSite, createFloor, refresh } = useApp();
+  const {
+    loading,
+    sites,
+    currentSite,
+    currentFloor,
+    createSite,
+    createFloor,
+    editing,
+    setFloorStats,
+    directoryEmployees,
+    directoryWorkspaces,
+    directoryAssignments,
+    goToLocation,
+  } = useApp();
   const { canEdit } = useAuth();
+
+  // Set when a search result points at a desk on a different floor/site: the workspace to
+  // select once that floor's own data has finished loading (see the reloadFloorData effect).
+  const pendingSelectionRef = useRef<string | null>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
@@ -23,7 +39,6 @@ export default function FloorMapPage() {
   const [workspaceTypes, setWorkspaceTypes] = useState<WorkspaceType[]>([]);
   const [deviceTypes, setDeviceTypes] = useState<DeviceType[]>([]);
 
-  const [editing, setEditing] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
@@ -67,10 +82,14 @@ export default function FloorMapPage() {
   }
 
   useEffect(() => {
-    reloadFloorData();
+    const target = pendingSelectionRef.current;
+    pendingSelectionRef.current = null;
     setSelectedWorkspaceId(null);
     setSelectedLabelId(null);
     setSelectedDeviceId(null);
+    reloadFloorData().then(() => {
+      if (target) setSelectedWorkspaceId(target);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFloor]);
 
@@ -91,6 +110,7 @@ export default function FloorMapPage() {
     });
   }, [workspaces, search, assignments, employees]);
 
+  // Local-floor lookup, used only by the on-canvas search-filter below (filteredWorkspaces).
   const employeeWorkspace = useMemo(() => {
     const map = new Map<string, Workspace>();
     for (const a of assignments) {
@@ -100,21 +120,41 @@ export default function FloorMapPage() {
     return map;
   }, [assignments, workspaces]);
 
+  // App-wide lookup (every site/floor, not just the one currently open) so the search box can
+  // find and jump to a person regardless of where they're actually seated.
+  const directoryEmployeeWorkspace = useMemo(() => {
+    const map = new Map<string, Workspace>();
+    for (const a of directoryAssignments) {
+      const w = directoryWorkspaces.find((x) => x.id === a.workspace_id);
+      if (w) map.set(a.employee_id, w);
+    }
+    return map;
+  }, [directoryAssignments, directoryWorkspaces]);
+
   const peopleMatches = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [];
-    return employees
+    return directoryEmployees
       .filter((e) => e.name.toLowerCase().includes(q))
       .slice(0, 8)
-      .map((e) => ({ employee: e, workspace: employeeWorkspace.get(e.id) ?? null }));
-  }, [search, employees, employeeWorkspace]);
+      .map((e) => {
+        const workspace = directoryEmployeeWorkspace.get(e.id) ?? null;
+        const siteName = workspace ? sites.find((s) => s.id === workspace.site_id)?.name ?? null : null;
+        return { employee: e, workspace, siteName };
+      });
+  }, [search, directoryEmployees, directoryEmployeeWorkspace, sites]);
 
   function handleSelectPerson(employeeId: string) {
-    const w = employeeWorkspace.get(employeeId);
     setSearch('');
-    if (w) {
+    const w = directoryEmployeeWorkspace.get(employeeId);
+    if (!w) return;
+    if (currentFloor && w.floor_id === currentFloor.id) {
       setSelectedWorkspaceId(w.id);
       setSelectedLabelId(null);
+      setSelectedDeviceId(null);
+    } else {
+      pendingSelectionRef.current = w.id;
+      goToLocation(w.site_id, w.floor_id);
     }
   }
 
@@ -127,6 +167,15 @@ export default function FloorMapPage() {
     }),
     [workspaces]
   );
+
+  // Mirrored into AppContext so the Sidebar's collapsible "Floor Details" section can show it
+  // without FloorMapPage and Sidebar needing a parent-child relationship. Cleared only on
+  // unmount (not on every stats change) so it doesn't flicker null between updates.
+  useEffect(() => {
+    setFloorStats(stats);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stats]);
+  useEffect(() => () => setFloorStats(null), [setFloorStats]);
 
   const selectedWorkspace = workspaces.find((w) => w.id === selectedWorkspaceId) ?? null;
   const selectedLabel = labels.find((l) => l.id === selectedLabelId) ?? null;
@@ -348,50 +397,27 @@ export default function FloorMapPage() {
   return (
     <>
       <TopBar search={search} onSearchChange={setSearch} peopleMatches={peopleMatches} onSelectPerson={handleSelectPerson} />
-      <div className={`grid gap-5 p-6 ${editing ? 'grid-cols-[1fr_300px]' : 'grid-cols-1'}`}>
-        <div>
-          <h1 className="text-2xl font-bold">
+      <div className={`grid gap-3 p-4 ${editing ? 'grid-cols-[minmax(0,1fr)_300px]' : 'grid-cols-[minmax(0,1fr)]'}`}>
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold">
             {currentSite.name} · {currentFloor.name}
           </h1>
-          <p className="mb-4 mt-1 text-sm text-slate-500">Interactive workplace map · Live workspace status</p>
-
-          <div className="mb-4 grid grid-cols-4 gap-3">
-            {(['total', 'available', 'occupied', 'reserved'] as const).map((key) => (
-              <div key={key} className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="text-xs uppercase text-slate-500">{key}</div>
-                <b className="mt-1 block text-2xl">{stats[key]}</b>
-              </div>
-            ))}
-          </div>
+          <p className="mb-2 mt-0.5 text-xs text-slate-500">Interactive workplace map · Live workspace status</p>
 
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="flex flex-wrap gap-2 border-b border-slate-200 p-2.5">
-              {canEdit && <BackgroundUpload floorId={currentFloor.id} onUploaded={refresh} />}
-              <span className="flex-1" />
-              {canEdit && (
-                <button
-                  className={`rounded-lg border px-3 py-2 text-sm ${
-                    editing ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white'
-                  }`}
-                  onClick={() => setEditing((e) => !e)}
-                >
-                  {editing ? '✓ Done Editing' : '✎ Edit Desks'}
+            {editing && (
+              <div className="flex flex-wrap gap-2 border-b border-slate-200 p-2.5">
+                <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddWorkspace}>
+                  ＋ Add Desk
                 </button>
-              )}
-              {editing && (
-                <>
-                  <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddWorkspace}>
-                    ＋ Add Desk
-                  </button>
-                  <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddLabel}>
-                    🏷 Add Label
-                  </button>
-                  <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddMapDevice}>
-                    📺 Add Device
-                  </button>
-                </>
-              )}
-            </div>
+                <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddLabel}>
+                  🏷 Add Label
+                </button>
+                <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" onClick={handleAddMapDevice}>
+                  📺 Add Device
+                </button>
+              </div>
+            )}
 
             <FloorMapCanvas
               backgroundUrl={currentFloor.background_image_path ? `/uploads/${currentFloor.background_image_path}` : null}

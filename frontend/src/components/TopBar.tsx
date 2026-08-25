@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 interface PersonMatch {
   employee: Employee;
   workspace: Workspace | null;
+  siteName?: string | null;
 }
 
 interface TopBarProps {
@@ -31,17 +32,19 @@ export default function TopBar({ search, onSearchChange, peopleMatches = [], onS
         />
         {peopleMatches.length > 0 && (
           <ul className="absolute left-0 top-full z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
-            {peopleMatches.map(({ employee, workspace }) => (
+            {peopleMatches.map(({ employee, workspace, siteName }) => (
               <li key={employee.id}>
                 <button
-                  className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     onSelectPerson?.(employee.id);
                   }}
                 >
                   <span>{employee.name}</span>
-                  <span className="text-xs text-slate-400">{workspace ? workspace.code : 'Unassigned'}</span>
+                  <span className="whitespace-nowrap text-xs text-slate-400">
+                    {workspace ? `${workspace.code}${siteName ? ` · ${siteName}` : ''}` : 'Unassigned'}
+                  </span>
                 </button>
               </li>
             ))}

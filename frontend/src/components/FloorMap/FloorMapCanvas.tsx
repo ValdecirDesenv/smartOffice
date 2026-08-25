@@ -29,6 +29,17 @@ function clamp(v: number, a: number, b: number) {
 // Pixel distance within which a dragged desk/label/device snaps to align with another one.
 const SNAP_PX = 8;
 
+// The map never renders narrower than this - below it the outer frame scrolls horizontally
+// instead of continuing to shrink, so desks never get compressed into illegibly small,
+// hard-to-tap targets on a narrow viewport (e.g. an iPad in portrait).
+const MIN_MAP_RENDER_WIDTH = 700;
+
+// Marker (desk/device) pixel sizes scale with the map's current render scale, clamped so they
+// never get too small to read/tap on a narrow screen or too large on an ultra-wide one - this is
+// what keeps desks a "consistent" size relative to the map instead of overlapping as it resizes.
+const MARKER_SCALE_MIN = 0.6;
+const MARKER_SCALE_MAX = 1.3;
+
 function closestWithin(value: number, candidates: number[], thresholdPercent: number): number | null {
   let best: number | null = null;
   let bestDist = Infinity;
@@ -106,13 +117,70 @@ export default function FloorMapCanvas({
   const vGuideRef = useRef<HTMLDivElement>(null);
   const hGuideRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const outerRef = useRef<HTMLDivElement>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+
+  const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [availableWidth, setAvailableWidth] = useState(900);
+  const [heightBudget, setHeightBudget] = useState(() => Math.max(300, window.innerHeight - 270));
+
+  useEffect(() => {
+    if (!backgroundUrl) {
+      setNaturalSize(null);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+    img.src = backgroundUrl;
+  }, [backgroundUrl]);
+
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const update = () => setAvailableWidth(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    function onResize() {
+      setHeightBudget(Math.max(300, window.innerHeight - 270));
+    }
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const baseW = naturalSize?.w ?? 900;
+  const baseH = naturalSize?.h ?? 570;
+  // Fit-to-width: the map fills the full available width (no side margins) down to a minimum
+  // render width, below which it holds that minimum and the outer frame scrolls horizontally
+  // instead of continuing to shrink. Height follows the image's real aspect ratio - even taller
+  // than the viewport budget, in which case the outer frame scrolls vertically too.
+  const renderedWidth = Math.round(Math.max(availableWidth, MIN_MAP_RENDER_WIDTH));
+  const fitScale = (renderedWidth / baseW) || 1;
+  const renderedHeight = Math.round(baseH * fitScale);
+  const markerScale = clamp(fitScale, MARKER_SCALE_MIN, MARKER_SCALE_MAX);
+  const px = (basePx: number) => Math.round(basePx * markerScale);
 
   const selectedMarker: { kind: 'workspace' | 'device'; id: string } | null = selectedWorkspaceId
     ? { kind: 'workspace', id: selectedWorkspaceId }
     : selectedDeviceId
       ? { kind: 'device', id: selectedDeviceId }
       : null;
+
+  // Brings a newly-selected desk into view (e.g. after jumping here from a people search) -
+  // scrollIntoView walks every scrollable ancestor, so this works whether the map itself needs
+  // to scroll, the page does, or both. A no-op if it's already visible.
+  useEffect(() => {
+    if (!selectedWorkspaceId) return;
+    document.getElementById(`workspace-${selectedWorkspaceId}`)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+      inline: 'center',
+    });
+  }, [selectedWorkspaceId]);
 
   // Popover anchor: recomputed whenever the selected desk/device (or its position) changes, view mode only.
   useEffect(() => {
@@ -308,16 +376,30 @@ export default function FloorMapCanvas({
   }
 
   return (
-    <div className="h-[570px] overflow-hidden bg-slate-100" onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+    <div ref={outerRef} className="relative">
       <div
-        ref={floorRef}
-        className={`relative h-full border-[5px] border-slate-300 bg-white bg-center bg-no-repeat shadow-lg ${
-          editing ? 'outline outline-[3px] -outline-offset-[3px] outline-dashed outline-blue-600' : ''
-        }`}
-        style={
-          backgroundUrl ? { backgroundImage: `url(${backgroundUrl})`, backgroundSize: '100% 100%' } : undefined
-        }
+        className="flex overflow-auto bg-slate-100 p-3"
+        style={{ height: Math.min(renderedHeight + 24, heightBudget + 24) }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
       >
+      <div className="relative m-auto shrink-0" style={{ width: renderedWidth, height: renderedHeight }}>
+        {backgroundUrl ? (
+          <img
+            src={backgroundUrl}
+            alt=""
+            draggable={false}
+            className="block h-full w-full select-none"
+          />
+        ) : (
+          <div className="h-full w-full bg-white" />
+        )}
+        <div
+          ref={floorRef}
+          className={`absolute inset-0 border-[5px] border-slate-300 shadow-lg ${
+            editing ? 'outline outline-[3px] -outline-offset-[3px] outline-dashed outline-blue-600' : ''
+          }`}
+        >
         <div
           ref={vGuideRef}
           className="pointer-events-none absolute inset-y-0 z-10 w-px bg-fuchsia-500"
@@ -334,12 +416,16 @@ export default function FloorMapCanvas({
             key={w.id}
             id={`workspace-${w.id}`}
             onPointerDown={startDrag('workspace', w.id, Number(w.pos_x ?? 0), Number(w.pos_y ?? 0))}
-            className={`absolute flex items-center justify-center overflow-hidden rounded border-2 font-bold leading-none ${
-              editing ? 'h-6 w-6 text-[7px]' : 'h-8 w-9 text-[10px]'
-            } ${STATUS_STYLES[w.status]} ${
+            className={`absolute flex items-center justify-center overflow-hidden rounded border-2 font-bold leading-none ${STATUS_STYLES[w.status]} ${
               editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-150'
             } ${w.id === selectedWorkspaceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
-            style={{ left: `${w.pos_x ?? 0}%`, top: `${w.pos_y ?? 0}%` }}
+            style={{
+              left: `${w.pos_x ?? 0}%`,
+              top: `${w.pos_y ?? 0}%`,
+              width: editing ? px(24) : px(36),
+              height: editing ? px(24) : px(32),
+              fontSize: editing ? px(7) : px(10),
+            }}
           >
             {w.code}
           </button>
@@ -350,10 +436,15 @@ export default function FloorMapCanvas({
             key={l.id}
             id={`label-${l.id}`}
             onPointerDown={startDrag('label', l.id, Number(l.pos_x ?? 0), Number(l.pos_y ?? 0))}
-            className={`absolute rounded-md bg-slate-900/85 px-2.5 py-1 text-[11px] font-semibold text-white ${
+            className={`absolute rounded-md bg-slate-900/85 font-semibold text-white ${
               editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
             } ${l.id === selectedLabelId ? 'ring-2 ring-blue-600' : ''}`}
-            style={{ left: `${l.pos_x ?? 0}%`, top: `${l.pos_y ?? 0}%` }}
+            style={{
+              left: `${l.pos_x ?? 0}%`,
+              top: `${l.pos_y ?? 0}%`,
+              padding: `${px(4)}px ${px(10)}px`,
+              fontSize: px(11),
+            }}
           >
             {l.text}
           </div>
@@ -379,10 +470,16 @@ export default function FloorMapCanvas({
                 {...commonProps}
                 title={d.name ?? undefined}
                 className={`absolute flex items-center justify-center overflow-hidden whitespace-nowrap rounded border-2 bg-white px-2 text-center font-bold leading-none ${
-                  editing ? 'h-7 w-24 text-[9px]' : 'h-9 w-32 text-[11px]'
-                } ${d.rotated ? 'rotate-90' : ''} ${dim ? 'border-red-400 opacity-60' : 'border-slate-500'} ${
+                  d.rotated ? 'rotate-90' : ''
+                } ${dim ? 'border-red-400 opacity-60' : 'border-slate-500'} ${
                   editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-125'
                 } ${d.id === selectedDeviceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
+                style={{
+                  ...commonProps.style,
+                  width: editing ? px(96) : px(128),
+                  height: editing ? px(28) : px(36),
+                  fontSize: editing ? px(9) : px(11),
+                }}
               >
                 {d.name || deviceType?.label || 'TV'}
               </button>
@@ -394,15 +491,23 @@ export default function FloorMapCanvas({
               {...commonProps}
               title={d.name ?? undefined}
               className={`absolute flex items-center justify-center rounded-full border-2 bg-white leading-none ${
-                editing ? 'h-6 w-6 text-[11px]' : 'h-8 w-8 text-sm'
-              } ${dim ? 'border-red-400 opacity-60' : 'border-slate-400'} ${
+                dim ? 'border-red-400 opacity-60' : 'border-slate-400'
+              } ${
                 editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-150'
               } ${d.id === selectedDeviceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
+              style={{
+                ...commonProps.style,
+                width: editing ? px(24) : px(32),
+                height: editing ? px(24) : px(32),
+                fontSize: editing ? px(11) : px(14),
+              }}
             >
               {DEVICE_ICONS[code] ?? '📦'}
             </button>
           );
         })}
+        </div>
+      </div>
       </div>
 
       {!editing && anchorRect && selectedMarker && selectedMarker.kind === 'workspace' && (

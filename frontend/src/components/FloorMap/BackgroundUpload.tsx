@@ -4,9 +4,12 @@ import { api } from '../../api/client';
 interface BackgroundUploadProps {
   floorId: string;
   onUploaded: () => void;
+  className?: string;
 }
 
-export default function BackgroundUpload({ floorId, onUploaded }: BackgroundUploadProps) {
+const DEFAULT_CLASS_NAME = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50';
+
+export default function BackgroundUpload({ floorId, onUploaded, className }: BackgroundUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -26,7 +29,7 @@ export default function BackgroundUpload({ floorId, onUploaded }: BackgroundUplo
   return (
     <>
       <button
-        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+        className={className ?? DEFAULT_CLASS_NAME}
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
       >

@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { pool } from '../../db/pool';
 import { withTransaction } from '../../db/transact';
 import { env } from '../../config/env';
@@ -75,6 +75,15 @@ async function createSession(userId: string): Promise<string> {
   return token;
 }
 
+// The app is reachable both over plain HTTP on the LAN and over HTTPS via the Cloudflare Tunnel
+// (which terminates TLS at Cloudflare's edge and forwards to core-api over plain HTTP). A cookie
+// marked Secure is silently dropped by the browser on an insecure connection, so this must reflect
+// how *this* request actually arrived - env.publicBaseUrl alone would wrongly mark every cookie
+// Secure once it's set to the tunnel's https:// URL, breaking LAN logins entirely.
+function isSecureRequest(request: FastifyRequest): boolean {
+  return request.protocol === 'https' || request.headers['x-forwarded-proto'] === 'https';
+}
+
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/login', { schema: { body: loginSchema } }, async (request, reply) => {
     const { username, password } = request.body as { username: string; password: string };
@@ -87,7 +96,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.setCookie(SESSION_COOKIE_NAME, token, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: env.publicBaseUrl.startsWith('https://'),
+      secure: isSecureRequest(request),
       path: '/',
       maxAge: SESSION_DAYS * 24 * 60 * 60,
     });
@@ -188,7 +197,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     reply.setCookie(SESSION_COOKIE_NAME, sessionToken, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: env.publicBaseUrl.startsWith('https://'),
+      secure: isSecureRequest(request),
       path: '/',
       maxAge: SESSION_DAYS * 24 * 60 * 60,
     });

@@ -1,6 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { api } from '../api/client';
-import { Floor, Site } from '../types';
+import { Employee, Floor, Site, Workspace, WorkspaceAssignment } from '../types';
+
+export interface FloorStats {
+  total: number;
+  available: number;
+  occupied: number;
+  reserved: number;
+}
 
 interface AppContextValue {
   loading: boolean;
@@ -17,6 +24,21 @@ interface AppContextValue {
   renameFloor: (id: string, name: string) => Promise<void>;
   deleteFloor: (id: string) => Promise<void>;
   refresh: () => Promise<void>;
+  // Floor Map page state mirrored here so the Sidebar can render the editing toggle and the
+  // background-upload/stats readout without the two components needing a parent-child relationship.
+  editing: boolean;
+  setEditing: (v: boolean) => void;
+  floorStats: FloorStats | null;
+  setFloorStats: (s: FloorStats | null) => void;
+  // A site/floor-independent directory used for the "search a person, jump to their desk"
+  // feature - loaded once for the whole app rather than scoped to the currently viewed site.
+  directoryEmployees: Employee[];
+  directoryWorkspaces: Workspace[];
+  directoryAssignments: WorkspaceAssignment[];
+  refreshDirectory: () => Promise<void>;
+  // Navigates to a specific site + floor directly, unlike selectSite (which always lands on
+  // that site's first floor) - used to jump straight to wherever a searched-for desk actually is.
+  goToLocation: (siteId: string, floorId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -27,6 +49,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [floors, setFloors] = useState<Floor[]>([]);
   const [currentSiteId, setCurrentSiteId] = useState<string | null>(null);
   const [currentFloorId, setCurrentFloorId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [floorStats, setFloorStats] = useState<FloorStats | null>(null);
+  const [directoryEmployees, setDirectoryEmployees] = useState<Employee[]>([]);
+  const [directoryWorkspaces, setDirectoryWorkspaces] = useState<Workspace[]>([]);
+  const [directoryAssignments, setDirectoryAssignments] = useState<WorkspaceAssignment[]>([]);
+
+  const refreshDirectory = useCallback(async () => {
+    const [emps, ws, as] = await Promise.all([api.employees.list({}), api.workspaces.list({}), api.assignments.list({})]);
+    setDirectoryEmployees(emps);
+    setDirectoryWorkspaces(ws);
+    setDirectoryAssignments(as);
+  }, []);
+
+  useEffect(() => {
+    refreshDirectory();
+  }, [refreshDirectory]);
+
+  // Switching floors invalidates whatever the previous floor's editing/stats state was.
+  useEffect(() => {
+    setEditing(false);
+    setFloorStats(null);
+  }, [currentFloorId]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -60,6 +104,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFloors(loadedFloors);
     setCurrentFloorId(loadedFloors[0]?.id ?? null);
   }, []);
+
+  const goToLocation = useCallback(
+    async (siteId: string, floorId: string) => {
+      if (siteId !== currentSiteId) {
+        setCurrentSiteId(siteId);
+        const loadedFloors = await api.floors.list(siteId);
+        setFloors(loadedFloors);
+      }
+      setCurrentFloorId(floorId);
+    },
+    [currentSiteId]
+  );
 
   const createSite = useCallback(
     async (name: string) => {
@@ -135,6 +191,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     renameFloor,
     deleteFloor,
     refresh,
+    editing,
+    setEditing,
+    floorStats,
+    setFloorStats,
+    directoryEmployees,
+    directoryWorkspaces,
+    directoryAssignments,
+    refreshDirectory,
+    goToLocation,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
