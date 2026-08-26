@@ -1,4 +1,13 @@
 .env
+.env.local
+.env.*.local
 node_modules/
 dist/
 *.log
+
+# Data exports/dumps/backups (e.g. from HubSpot sync work or DB debugging) should never be
+# committed - they belong in a local scratch dir, not the repo.
+*.csv
+*.sql
+*.dump
+*backup*

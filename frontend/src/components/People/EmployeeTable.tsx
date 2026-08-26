@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { Employee, Team } from '../../types';
+import { Employee, Site, Team } from '../../types';
 import EmployeeForm from './EmployeeForm';
 
 interface EmployeeTableProps {
   employees: Employee[];
   teams: Team[];
   readOnly?: boolean;
+  // When provided, an extra "Office" column shows which site each employee belongs to - used by
+  // the People page's "All Offices" combined view.
+  sites?: Site[];
   onUpdate: (id: string, data: { name: string; email: string; job_title: string; team_id: string | null }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onCreateTeam: (name: string) => Promise<Team>;
 }
 
-export default function EmployeeTable({ employees, teams, readOnly = false, onUpdate, onDelete, onCreateTeam }: EmployeeTableProps) {
+export default function EmployeeTable({ employees, teams, readOnly = false, sites, onUpdate, onDelete, onCreateTeam }: EmployeeTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
@@ -22,6 +25,7 @@ export default function EmployeeTable({ employees, teams, readOnly = false, onUp
           <th className="px-4 py-2">Email</th>
           <th className="px-4 py-2">Job title</th>
           <th className="px-4 py-2">Team</th>
+          {sites && <th className="px-4 py-2">Office</th>}
           <th className="px-4 py-2" />
         </tr>
       </thead>
@@ -29,7 +33,7 @@ export default function EmployeeTable({ employees, teams, readOnly = false, onUp
         {employees.map((emp) =>
           !readOnly && editingId === emp.id ? (
             <tr key={emp.id}>
-              <td colSpan={5} className="p-2">
+              <td colSpan={sites ? 6 : 5} className="p-2">
                 <EmployeeForm
                   initial={emp}
                   teams={teams}
@@ -48,6 +52,9 @@ export default function EmployeeTable({ employees, teams, readOnly = false, onUp
               <td className="px-4 py-2 text-slate-500">{emp.email}</td>
               <td className="px-4 py-2 text-slate-500">{emp.job_title}</td>
               <td className="px-4 py-2 text-slate-500">{teams.find((t) => t.id === emp.team_id)?.name ?? '—'}</td>
+              {sites && (
+                <td className="px-4 py-2 text-slate-500">{sites.find((s) => s.id === emp.site_id)?.name ?? '—'}</td>
+              )}
               <td className="px-4 py-2 text-right">
                 {!readOnly && (
                   <>
@@ -65,7 +72,7 @@ export default function EmployeeTable({ employees, teams, readOnly = false, onUp
         )}
         {employees.length === 0 && (
           <tr>
-            <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+            <td colSpan={sites ? 6 : 5} className="px-4 py-6 text-center text-slate-400">
               No employees yet.
             </td>
           </tr>

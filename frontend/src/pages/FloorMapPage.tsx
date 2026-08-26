@@ -120,6 +120,17 @@ export default function FloorMapPage() {
     return map;
   }, [assignments, workspaces]);
 
+  // Desks whose occupant is flagged inactive (e.g. a former employee per the HubSpot sync) -
+  // rendered in a distinct warning color on the map so it's clear the desk should be unassigned.
+  const flaggedWorkspaceIds = useMemo(() => {
+    const inactiveEmployeeIds = new Set(employees.filter((e) => e.status === 'inactive').map((e) => e.id));
+    const ids = new Set<string>();
+    for (const a of assignments) {
+      if (inactiveEmployeeIds.has(a.employee_id)) ids.add(a.workspace_id);
+    }
+    return ids;
+  }, [assignments, employees]);
+
   // App-wide lookup (every site/floor, not just the one currently open) so the search box can
   // find and jump to a person regardless of where they're actually seated.
   const directoryEmployeeWorkspace = useMemo(() => {
@@ -451,6 +462,7 @@ export default function FloorMapPage() {
               selectedWorkspaceEmployee={assignedEmployee}
               selectedWorkspaceEmployeeTeam={assignedEmployeeTeam}
               selectedWorkspaceDevices={workspaceDevices}
+              flaggedWorkspaceIds={flaggedWorkspaceIds}
             />
 
             <div className="flex gap-5 border-t border-slate-200 px-3.5 py-2.5 text-xs text-slate-500">
@@ -458,6 +470,7 @@ export default function FloorMapPage() {
               <span>🔴 Occupied</span>
               <span>🟡 Reserved</span>
               <span>🟣 Assigned</span>
+              <span>🟠 Should be unassigned</span>
             </div>
           </div>
         </div>

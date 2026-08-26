@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -34,6 +34,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   } = useApp();
 
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [expandedSiteId, setExpandedSiteId] = useState<string | null>(null);
   const [addingSite, setAddingSite] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
@@ -43,6 +44,14 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const [newFloorName, setNewFloorName] = useState('');
   const [editingFloorId, setEditingFloorId] = useState<string | null>(null);
   const [editFloorName, setEditFloorName] = useState('');
+
+  // Auto-expand whichever office becomes current (e.g. via search-jumping to a desk on a
+  // different site) so its floor list is visible without an extra click - but once expanded,
+  // a manual toggle can still collapse it without this effect immediately reopening it, since
+  // it only re-fires when the current site itself changes.
+  useEffect(() => {
+    if (currentSite) setExpandedSiteId(currentSite.id);
+  }, [currentSite?.id]);
 
   async function submitNewSite() {
     const name = newSiteName.trim();
@@ -205,6 +214,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
       {sites.map((site) => {
         const isCurrent = currentSite?.id === site.id;
+        const isExpanded = expandedSiteId === site.id;
         return (
           <div key={site.id} className="mb-1">
             {editingSiteId === site.id ? (
@@ -222,12 +232,16 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             ) : (
               <div className="group flex items-center">
                 <button
-                  onClick={() => !isCurrent && selectSite(site.id)}
-                  className={`block w-full min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-left text-sm font-semibold ${
+                  onClick={() => {
+                    if (!isCurrent) selectSite(site.id);
+                    else setExpandedSiteId((prev) => (prev === site.id ? null : site.id));
+                  }}
+                  className={`flex w-full min-w-0 flex-1 items-center justify-between gap-1.5 truncate rounded-lg px-3 py-2 text-left text-sm font-semibold ${
                     isCurrent ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800'
                   }`}
                 >
-                  {site.name}
+                  <span className="min-w-0 flex-1 truncate">{site.name}</span>
+                  <span className="shrink-0 text-xs text-slate-500">{isExpanded ? '▾' : '▸'}</span>
                 </button>
                 {canEdit && (
                   <>
@@ -252,7 +266,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
               </div>
             )}
 
-            {isCurrent && (
+            {isExpanded && (
               <div className="ml-3 mt-1 border-l border-slate-800 pl-2">
                 {floors.map((floor) =>
                   editingFloorId === floor.id ? (

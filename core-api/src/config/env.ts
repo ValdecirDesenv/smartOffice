@@ -18,4 +18,7 @@ export const env = {
   // sessions/invites can be built and tested before Gmail SMTP credentials exist.
   gmailUser: process.env.GMAIL_USER,
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD,
+  // Optional: the HubSpot employee sync route returns a clear error until this is set, rather
+  // than the app failing to start.
+  hubspotAccessToken: process.env.HUBSPOT_ACCESS_TOKEN,
 };

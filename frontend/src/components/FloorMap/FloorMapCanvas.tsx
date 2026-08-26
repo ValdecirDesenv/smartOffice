@@ -11,6 +11,11 @@ const STATUS_STYLES: Record<string, string> = {
   inactive: 'bg-slate-200 border-slate-400 text-slate-500',
 };
 
+// Overrides the normal status color for a desk whose occupant is flagged inactive (e.g. a former
+// employee per the HubSpot sync) - distinct from every STATUS_STYLES color above so it reads as
+// "needs attention" rather than a normal occupancy state.
+const FLAGGED_STYLE = 'bg-orange-100 border-orange-500 text-orange-800';
+
 const DEVICE_ICONS: Record<string, string> = {
   tv: '📺',
   printer: '🖨️',
@@ -86,6 +91,10 @@ interface FloorMapCanvasProps {
   selectedWorkspaceEmployee: Employee | null;
   selectedWorkspaceEmployeeTeam: Team | null;
   selectedWorkspaceDevices: Device[];
+  // Workspace ids whose currently-assigned employee is flagged inactive (status='inactive') -
+  // rendered in a distinct warning color so it's visible at a glance that the desk should be
+  // unassigned, without having to open each one's popover.
+  flaggedWorkspaceIds?: Set<string>;
 }
 
 const POPOVER_WIDTH = 256;
@@ -110,6 +119,7 @@ export default function FloorMapCanvas({
   selectedWorkspaceEmployee,
   selectedWorkspaceEmployeeTeam,
   selectedWorkspaceDevices,
+  flaggedWorkspaceIds,
 }: FloorMapCanvasProps) {
   const floorRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragTarget | null>(null);
@@ -411,25 +421,29 @@ export default function FloorMapCanvas({
           style={{ display: 'none' }}
         />
 
-        {workspaces.map((w) => (
-          <button
-            key={w.id}
-            id={`workspace-${w.id}`}
-            onPointerDown={startDrag('workspace', w.id, Number(w.pos_x ?? 0), Number(w.pos_y ?? 0))}
-            className={`absolute flex items-center justify-center overflow-hidden rounded border-2 font-bold leading-none ${STATUS_STYLES[w.status]} ${
-              editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-150'
-            } ${w.id === selectedWorkspaceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
-            style={{
-              left: `${w.pos_x ?? 0}%`,
-              top: `${w.pos_y ?? 0}%`,
-              width: editing ? px(24) : px(36),
-              height: editing ? px(24) : px(32),
-              fontSize: editing ? px(7) : px(10),
-            }}
-          >
-            {w.code}
-          </button>
-        ))}
+        {workspaces.map((w) => {
+          const flagged = flaggedWorkspaceIds?.has(w.id) ?? false;
+          return (
+            <button
+              key={w.id}
+              id={`workspace-${w.id}`}
+              title={flagged ? 'Assigned employee is no longer active - this desk should be unassigned' : undefined}
+              onPointerDown={startDrag('workspace', w.id, Number(w.pos_x ?? 0), Number(w.pos_y ?? 0))}
+              className={`absolute flex items-center justify-center overflow-hidden rounded border-2 font-bold leading-none ${flagged ? FLAGGED_STYLE : STATUS_STYLES[w.status]} ${
+                editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-150'
+              } ${w.id === selectedWorkspaceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
+              style={{
+                left: `${w.pos_x ?? 0}%`,
+                top: `${w.pos_y ?? 0}%`,
+                width: editing ? px(24) : px(36),
+                height: editing ? px(24) : px(32),
+                fontSize: editing ? px(7) : px(10),
+              }}
+            >
+              {w.code}
+            </button>
+          );
+        })}
 
         {labels.map((l) => (
           <div

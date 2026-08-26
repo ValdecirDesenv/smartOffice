@@ -13,9 +13,9 @@ export default function TeamPicker({ teams, value, onChange, onCreateTeam }: Tea
   const [creating, setCreating] = useState(false);
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <select
-        className="flex-1 rounded-md border border-slate-300 px-2.5 py-2 text-sm"
+        className="min-w-[140px] flex-1 rounded-md border border-slate-300 px-2.5 py-2 text-sm"
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
       >
@@ -30,13 +30,15 @@ export default function TeamPicker({ teams, value, onChange, onCreateTeam }: Tea
         <>
           <input
             autoFocus
-            className="w-32 rounded-md border border-slate-300 px-2 py-2 text-sm"
+            className="min-w-[120px] flex-1 rounded-md border border-slate-300 px-2 py-2 text-sm"
             placeholder="Team name"
             value={newTeamName}
             onChange={(e) => setNewTeamName(e.target.value)}
           />
           <button
-            className="rounded-md bg-blue-600 px-2 text-sm text-white"
+            className="rounded-md bg-blue-600 px-2.5 text-sm text-white"
+            title="Create team"
+            aria-label="Create team"
             onClick={async () => {
               if (!newTeamName.trim()) return;
               const team = await onCreateTeam(newTeamName.trim());
@@ -45,7 +47,7 @@ export default function TeamPicker({ teams, value, onChange, onCreateTeam }: Tea
               setCreating(false);
             }}
           >
-            Add
+            ✓
           </button>
         </>
       ) : (
