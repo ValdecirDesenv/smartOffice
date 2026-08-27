@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../api/client';
 import { Device, DeviceType, Employee, Label, Team, Workspace, WorkspaceAssignment, WorkspaceType } from '../types';
 import TopBar from '../components/TopBar';
-import FloorMapCanvas from '../components/FloorMap/FloorMapCanvas';
+import FloorMapCanvas, { teamColors } from '../components/FloorMap/FloorMapCanvas';
 import WorkspaceDetailPanel from '../components/FloorMap/WorkspaceDetailPanel';
 import DeviceDetailPanel from '../components/FloorMap/DeviceDetailPanel';
 import LabelEditor from '../components/FloorMap/LabelEditor';
@@ -130,6 +130,38 @@ export default function FloorMapPage() {
     }
     return ids;
   }, [assignments, employees]);
+
+  // Stable team -> border color assignment: ordered by team id so a given team keeps the same
+  // color across renders (and, since teams are site-scoped, across every floor in this site).
+  const orderedTeamIds = useMemo(() => [...teams].map((t) => t.id).sort(), [teams]);
+
+  // Desks whose assigned employee belongs to a team - lets desks for the same team be spotted at
+  // a glance via border color, regardless of the desk's own status fill.
+  const teamBorderClass = useMemo(() => {
+    const employeeTeam = new Map(employees.map((e) => [e.id, e.team_id]));
+    const map = new Map<string, string>();
+    for (const a of assignments) {
+      const teamId = employeeTeam.get(a.employee_id);
+      if (!teamId) continue;
+      const colors = teamColors(teamId, orderedTeamIds);
+      if (colors) map.set(a.workspace_id, colors.border);
+    }
+    return map;
+  }, [assignments, employees, orderedTeamIds]);
+
+  // Only the teams actually seated on this floor, for the legend below the map.
+  const legendTeams = useMemo(() => {
+    const employeeTeam = new Map(employees.map((e) => [e.id, e.team_id]));
+    const assignedTeamIds = new Set<string>();
+    for (const a of assignments) {
+      const teamId = employeeTeam.get(a.employee_id);
+      if (teamId) assignedTeamIds.add(teamId);
+    }
+    return teams
+      .filter((t) => assignedTeamIds.has(t.id))
+      .map((t) => ({ id: t.id, name: t.name, colors: teamColors(t.id, orderedTeamIds) }))
+      .filter((t): t is { id: string; name: string; colors: { border: string; bg: string } } => Boolean(t.colors));
+  }, [assignments, employees, teams, orderedTeamIds]);
 
   // App-wide lookup (every site/floor, not just the one currently open) so the search box can
   // find and jump to a person regardless of where they're actually seated.
@@ -463,14 +495,22 @@ export default function FloorMapPage() {
               selectedWorkspaceEmployeeTeam={assignedEmployeeTeam}
               selectedWorkspaceDevices={workspaceDevices}
               flaggedWorkspaceIds={flaggedWorkspaceIds}
+              teamBorderClass={teamBorderClass}
             />
 
-            <div className="flex gap-5 border-t border-slate-200 px-3.5 py-2.5 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-200 px-3.5 py-2.5 text-xs text-slate-500">
               <span>🟢 Available</span>
               <span>🔴 Occupied</span>
               <span>🟡 Reserved</span>
               <span>🟣 Assigned</span>
               <span>🟠 Should be unassigned</span>
+              {legendTeams.length > 0 && <span className="text-slate-300">·</span>}
+              {legendTeams.map((t) => (
+                <span key={t.id} className="flex items-center gap-1">
+                  <span className={`h-2.5 w-2.5 rounded-full ${t.colors.bg}`} />
+                  {t.name}
+                </span>
+              ))}
             </div>
           </div>
         </div>

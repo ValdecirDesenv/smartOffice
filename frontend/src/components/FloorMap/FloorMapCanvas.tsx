@@ -3,18 +3,55 @@ import { Device, DeviceType, Employee, Label, Team, Workspace, WorkspaceType } f
 import WorkspaceInfoPopover from './WorkspaceInfoPopover';
 import DeviceInfoPopover from './DeviceInfoPopover';
 
-const STATUS_STYLES: Record<string, string> = {
-  available: 'bg-emerald-100 border-emerald-500 text-emerald-800',
-  occupied: 'bg-red-100 border-red-500 text-red-800',
-  reserved: 'bg-amber-100 border-amber-500 text-amber-800',
-  assigned: 'bg-indigo-100 border-indigo-500 text-indigo-800',
-  inactive: 'bg-slate-200 border-slate-400 text-slate-500',
+// Fill/text stays keyed by desk status; border color is a separate concern below so a team's
+// border color can be swapped in without touching the fill.
+const STATUS_FILL_STYLES: Record<string, string> = {
+  available: 'bg-emerald-100 text-emerald-800',
+  occupied: 'bg-red-100 text-red-800',
+  reserved: 'bg-amber-100 text-amber-800',
+  assigned: 'bg-indigo-100 text-indigo-800',
+  inactive: 'bg-slate-200 text-slate-500',
+};
+const STATUS_BORDER_STYLES: Record<string, string> = {
+  available: 'border-emerald-500',
+  occupied: 'border-red-500',
+  reserved: 'border-amber-500',
+  assigned: 'border-indigo-500',
+  inactive: 'border-slate-400',
 };
 
-// Overrides the normal status color for a desk whose occupant is flagged inactive (e.g. a former
-// employee per the HubSpot sync) - distinct from every STATUS_STYLES color above so it reads as
-// "needs attention" rather than a normal occupancy state.
-const FLAGGED_STYLE = 'bg-orange-100 border-orange-500 text-orange-800';
+// Overrides the normal status fill for a desk whose occupant is flagged inactive (e.g. a former
+// employee per the HubSpot sync) - distinct from every STATUS_FILL_STYLES color above so it
+// reads as "needs attention" rather than a normal occupancy state. Takes priority over a team
+// border too, since a flagged desk needing action is a more urgent signal than who sat there.
+const FLAGGED_FILL = 'bg-orange-100 text-orange-800';
+const FLAGGED_BORDER = 'border-orange-500';
+
+// Border/dot colors used to show which team a desk's assigned employee belongs to. Deliberately
+// avoids every hue already used above (emerald/red/amber/indigo/orange/slate) so a team color
+// never gets mistaken for a status or the "should be unassigned" flag. Written out as complete
+// class names (not built with string concatenation) so Tailwind's build-time scanner picks up
+// both the border-* (used on the map) and bg-* (used for the legend dot) variants - a
+// dynamically-concatenated class name wouldn't be detected and would silently render unstyled.
+const TEAM_PALETTE = [
+  { border: 'border-blue-500', bg: 'bg-blue-500' },
+  { border: 'border-violet-500', bg: 'bg-violet-500' },
+  { border: 'border-fuchsia-500', bg: 'bg-fuchsia-500' },
+  { border: 'border-pink-500', bg: 'bg-pink-500' },
+  { border: 'border-sky-500', bg: 'bg-sky-500' },
+  { border: 'border-purple-500', bg: 'bg-purple-500' },
+  { border: 'border-rose-500', bg: 'bg-rose-500' },
+  { border: 'border-cyan-500', bg: 'bg-cyan-500' },
+];
+
+// Assigns each team a stable color based on its position in `orderedTeamIds` (pass the same
+// ordering - e.g. every team for the current site, sorted by id - every time so a given team
+// always gets the same color across renders and floors).
+export function teamColors(teamId: string, orderedTeamIds: string[]): { border: string; bg: string } | null {
+  const idx = orderedTeamIds.indexOf(teamId);
+  if (idx < 0) return null;
+  return TEAM_PALETTE[idx % TEAM_PALETTE.length];
+}
 
 const DEVICE_ICONS: Record<string, string> = {
   tv: '📺',
@@ -95,6 +132,9 @@ interface FloorMapCanvasProps {
   // rendered in a distinct warning color so it's visible at a glance that the desk should be
   // unassigned, without having to open each one's popover.
   flaggedWorkspaceIds?: Set<string>;
+  // Workspace id -> border color class, for desks whose assigned employee belongs to a team -
+  // lets desks for the same team be spotted at a glance regardless of their status fill.
+  teamBorderClass?: Map<string, string>;
 }
 
 const POPOVER_WIDTH = 256;
@@ -120,6 +160,7 @@ export default function FloorMapCanvas({
   selectedWorkspaceEmployeeTeam,
   selectedWorkspaceDevices,
   flaggedWorkspaceIds,
+  teamBorderClass,
 }: FloorMapCanvasProps) {
   const floorRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragTarget | null>(null);
@@ -423,13 +464,15 @@ export default function FloorMapCanvas({
 
         {workspaces.map((w) => {
           const flagged = flaggedWorkspaceIds?.has(w.id) ?? false;
+          const fill = flagged ? FLAGGED_FILL : STATUS_FILL_STYLES[w.status];
+          const border = flagged ? FLAGGED_BORDER : teamBorderClass?.get(w.id) ?? STATUS_BORDER_STYLES[w.status];
           return (
             <button
               key={w.id}
               id={`workspace-${w.id}`}
               title={flagged ? 'Assigned employee is no longer active - this desk should be unassigned' : undefined}
               onPointerDown={startDrag('workspace', w.id, Number(w.pos_x ?? 0), Number(w.pos_y ?? 0))}
-              className={`absolute flex items-center justify-center overflow-hidden rounded border-2 font-bold leading-none ${flagged ? FLAGGED_STYLE : STATUS_STYLES[w.status]} ${
+              className={`absolute flex items-center justify-center overflow-hidden rounded border-2 font-bold leading-none ${fill} ${border} ${
                 editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-150'
               } ${w.id === selectedWorkspaceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
               style={{
