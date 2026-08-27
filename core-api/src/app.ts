@@ -21,6 +21,7 @@ import deviceTypesRoutes from './modules/device-types/device-types.routes';
 import devicesRoutes from './modules/devices/devices.routes';
 import assignmentsRoutes from './modules/assignments/assignments.routes';
 import hubspotRoutes from './modules/hubspot/hubspot.routes';
+import configSnapshotsRoutes from './modules/config-snapshots/config-snapshots.routes';
 
 export function buildApp(): FastifyInstance {
   const fastify = Fastify({ logger: true });
@@ -64,6 +65,7 @@ export function buildApp(): FastifyInstance {
   fastify.register(devicesRoutes, { prefix: '/api/devices' });
   fastify.register(assignmentsRoutes, { prefix: '/api/assignments' });
   fastify.register(hubspotRoutes, { prefix: '/api/hubspot' });
+  fastify.register(configSnapshotsRoutes, { prefix: '/api/config-snapshots' });
 
   // Uploaded files (floor backgrounds, employee/workspace photos), served read-only. Behind the
   // auth hook too - fine, the app only ever loads these while logged in anyway.

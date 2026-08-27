@@ -10,6 +10,7 @@ import type {
   Device,
   WorkspaceAssignment,
   User,
+  ConfigSnapshot,
 } from '../types';
 
 export class ApiError extends Error {
@@ -139,5 +140,12 @@ export const api = {
     create: (data: { workspace_id: string; employee_id: string }) =>
       request<WorkspaceAssignment>('POST', '/api/assignments', data),
     remove: (id: string) => request<WorkspaceAssignment>('DELETE', `/api/assignments/${id}`),
+  },
+  configSnapshots: {
+    list: () => request<ConfigSnapshot[]>('GET', '/api/config-snapshots'),
+    create: (name: string) => request<ConfigSnapshot>('POST', '/api/config-snapshots', { name }),
+    overwrite: (id: string, name: string) => request<ConfigSnapshot>('PUT', `/api/config-snapshots/${id}`, { name }),
+    restore: (id: string) => request<{ id: string; name: string }>('POST', `/api/config-snapshots/${id}/restore`),
+    remove: (id: string) => request<void>('DELETE', `/api/config-snapshots/${id}`),
   },
 };

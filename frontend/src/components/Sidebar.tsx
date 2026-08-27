@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import BackgroundUpload from './FloorMap/BackgroundUpload';
@@ -13,6 +13,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
+  const navigate = useNavigate();
   const { currentUser, canEdit } = useAuth();
   const {
     sites,
@@ -144,6 +145,11 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       {currentUser?.is_admin && (
         <NavLink to="/users" className={navLinkClass}>
           Users
+        </NavLink>
+      )}
+      {currentUser?.is_admin && (
+        <NavLink to="/config-snapshots" className={navLinkClass}>
+          Config Snapshots
         </NavLink>
       )}
 
@@ -286,7 +292,10 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                   ) : (
                     <div key={floor.id} className="group flex items-center">
                       <button
-                        onClick={() => setCurrentFloorId(floor.id)}
+                        onClick={() => {
+                          setCurrentFloorId(floor.id);
+                          navigate('/');
+                        }}
                         className={`block w-full min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-left text-sm ${
                           currentFloor?.id === floor.id ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800'
                         }`}

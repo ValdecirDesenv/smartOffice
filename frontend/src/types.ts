@@ -99,3 +99,15 @@ export interface User {
   is_admin: boolean;
   can_edit: boolean;
 }
+
+export interface ConfigSnapshot {
+  id: string;
+  name: string;
+  created_by_username: string;
+  created_at: string;
+  updated_at: string;
+  sites_count: number;
+  floors_count: number;
+  workspaces_count: number;
+  employees_count: number;
+}
