@@ -41,13 +41,22 @@ const employeesRoutes: FastifyPluginAsync = async (fastify) => {
       conditions.push(`team_id = $${values.length}`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const { rows } = await pool.query(`SELECT * FROM employees ${where} ORDER BY id`, values);
+    // hubspot_data itself isn't part of the API surface (it's a raw sync scratch column, not
+    // meant for the frontend) - only headshot_url is pulled out of it, for the Floor Map's desk
+    // popover photo.
+    const { rows } = await pool.query(
+      `SELECT *, hubspot_data->>'headshot_url' AS headshot_url FROM employees ${where} ORDER BY id`,
+      values
+    );
     return rows;
   });
 
   fastify.get('/:id', async (request, reply) => {
     const id = Number((request.params as { id: string }).id);
-    const { rows } = await pool.query('SELECT * FROM employees WHERE id = $1', [id]);
+    const { rows } = await pool.query(
+      `SELECT *, hubspot_data->>'headshot_url' AS headshot_url FROM employees WHERE id = $1`,
+      [id]
+    );
     if (!rows[0]) return reply.code(404).send({ error: 'Employee not found' });
     return rows[0];
   });

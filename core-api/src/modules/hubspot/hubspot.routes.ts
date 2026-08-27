@@ -85,6 +85,13 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
       const firstName = asNonEmptyString(row.values.first_name);
       const lastName = asNonEmptyString(row.values.last_name);
       const fullName = firstName || lastName ? [firstName, lastName].filter(Boolean).join(' ') : null;
+      // Some people are recorded locally under the name they actually go by rather than their
+      // legal first name (e.g. HubDB first_name "Chao Yu" + preferred_name "Brenda" for someone
+      // stored locally as "Brenda Chiu") - tried only as a second candidate for *finding* the
+      // existing local record, never as what gets written to it (fullName above stays the source
+      // of truth for that, matching every other synced employee).
+      const preferredName = asNonEmptyString(row.values.preferred_name);
+      const preferredFullName = preferredName && lastName ? `${preferredName} ${lastName}` : null;
       const jobTitle = asNonEmptyString(row.values.role);
       const department = asNonEmptyString(row.values.department);
       const isFormer = isFormerEmployeeStatus(row.values.status);
@@ -114,10 +121,11 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
         // reassign someone who already has a different verified email), and only when exactly
         // one local employee has that name (an ambiguous match is safer left as unmatched than
         // guessed at).
-        if (!existing && fullName) {
+        for (const candidate of [fullName, preferredFullName]) {
+          if (existing || !candidate) continue;
           const { rows: byName } = await client.query(
             `SELECT * FROM employees WHERE lower(name) = lower($1) AND (email IS NULL OR email = '') FOR UPDATE`,
-            [fullName]
+            [candidate]
           );
           if (byName.length === 1) {
             existing = byName[0];

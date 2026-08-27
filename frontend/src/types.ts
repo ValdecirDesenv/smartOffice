@@ -55,6 +55,8 @@ export interface Employee {
   email: string | null;
   job_title: string | null;
   status: 'active' | 'inactive';
+  // From the HubSpot sync's hubspot_data - null for anyone never synced or with no photo on file.
+  headshot_url?: string | null;
 }
 
 export type DeviceStatus = 'active' | 'inactive' | 'missing' | 'retired';

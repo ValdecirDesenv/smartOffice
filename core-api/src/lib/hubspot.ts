@@ -18,6 +18,7 @@ const EMPLOYEE_PROPERTIES = [
   'start_date',
   'termination_date',
   'registered',
+  'headshot_url',
 ];
 
 export interface HubspotEmployeeRow {

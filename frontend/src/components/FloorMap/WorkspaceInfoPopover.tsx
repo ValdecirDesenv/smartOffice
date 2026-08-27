@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Device, DeviceType, Employee, Team, Workspace, WorkspaceType } from '../../types';
 
 const STATUS_DOT: Record<string, string> = {
@@ -29,17 +30,32 @@ export default function WorkspaceInfoPopover({
   style,
   onClose,
 }: WorkspaceInfoPopoverProps) {
+  const [photoEnlarged, setPhotoEnlarged] = useState(false);
+
   return (
     <div style={style} className="w-64 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-2">
           <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[workspace.status] ?? 'bg-slate-400'}`} />
           <span className="font-bold">{workspace.code}</span>
           <span className="text-xs capitalize text-slate-500">{workspace.status}</span>
         </div>
-        <button className="text-slate-400 hover:text-slate-600" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
+        <div className="flex items-start gap-2">
+          {assignedEmployee?.headshot_url && (
+            <img
+              src={assignedEmployee.headshot_url}
+              alt={assignedEmployee.name}
+              onClick={() => setPhotoEnlarged(true)}
+              onMouseLeave={() => setPhotoEnlarged(false)}
+              className={`h-8 w-8 shrink-0 cursor-pointer rounded-full border-2 border-slate-400 object-cover transition-transform duration-150 ${
+                photoEnlarged ? 'z-10 scale-[2.25]' : 'scale-100'
+              }`}
+            />
+          )}
+          <button className="text-slate-400 hover:text-slate-600" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
       </div>
 
       <div className="mb-2">
