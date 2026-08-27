@@ -98,6 +98,22 @@ export interface User {
   employee_id: string | null;
   is_admin: boolean;
   can_edit: boolean;
+  can_sync_hubspot: boolean;
+}
+
+export interface HubspotSyncResult {
+  matched: number;
+  updated: number;
+  matchedByEmail: number;
+  matchedByName: number;
+  created: number;
+  skippedNoIdentifier: number;
+  skippedNoName: number;
+  removedFormerEmployees: number;
+  flaggedFormerEmployees: number;
+  skippedFormerNoMatch: number;
+  offboardedRecorded: number;
+  errors: Array<{ row: string; message: string }>;
 }
 
 export interface ConfigSnapshot {

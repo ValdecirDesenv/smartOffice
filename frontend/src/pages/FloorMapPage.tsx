@@ -24,6 +24,7 @@ export default function FloorMapPage() {
     directoryWorkspaces,
     directoryAssignments,
     goToLocation,
+    refreshDirectory,
   } = useApp();
   const { canEdit } = useAuth();
 
@@ -73,10 +74,15 @@ export default function FloorMapPage() {
       setAssignments([]);
       return;
     }
+    // Also refreshes the app-wide directory (AppContext) every time - it's what the cross-site
+    // search and the top bar's "Flagged" list read from, and staying in sync with whatever just
+    // changed here (an assignment, a deleted workspace, ...) matters more than the small cost of
+    // one extra fetch on a plain floor switch.
     const [ws, ls, as] = await Promise.all([
       api.workspaces.list({ floorId: currentFloor.id }),
       api.labels.list(currentFloor.id),
       api.assignments.list({}),
+      refreshDirectory(),
     ]);
     setWorkspaces(ws);
     setLabels(ls);

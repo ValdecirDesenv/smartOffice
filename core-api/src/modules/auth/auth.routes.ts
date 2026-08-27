@@ -55,6 +55,7 @@ function publicUser(row: {
   employee_id: string | null;
   is_admin: boolean;
   can_edit: boolean;
+  can_sync_hubspot: boolean;
 }) {
   return {
     id: row.id,
@@ -63,6 +64,7 @@ function publicUser(row: {
     employee_id: row.employee_id,
     is_admin: row.is_admin,
     can_edit: row.can_edit,
+    can_sync_hubspot: row.can_sync_hubspot,
   };
 }
 

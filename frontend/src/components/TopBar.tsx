@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Employee, Workspace } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 
 interface PersonMatch {
   employee: Employee;
@@ -23,9 +24,29 @@ export default function TopBar({
   onSelectPerson,
   onOpenTicketDesk,
 }: TopBarProps) {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, canEdit, logout } = useAuth();
+  const { directoryEmployees, directoryWorkspaces, directoryAssignments, sites } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [flaggedOpen, setFlaggedOpen] = useState(false);
   const initials = currentUser?.username.slice(0, 2).toUpperCase() ?? '?';
+
+  // Employees marked inactive (e.g. a former employee per the HubSpot sync) who still occupy a
+  // desk - these were deliberately not auto-unassigned, so this is the one place to find and
+  // jump to them for review, rather than having to spot the orange border on every floor.
+  const flagged = useMemo(() => {
+    const employeesById = new Map(directoryEmployees.map((e) => [e.id, e]));
+    const workspacesById = new Map(directoryWorkspaces.map((w) => [w.id, w]));
+    const result: PersonMatch[] = [];
+    for (const a of directoryAssignments) {
+      if (a.unassigned_at) continue;
+      const employee = employeesById.get(a.employee_id);
+      if (!employee || employee.status !== 'inactive') continue;
+      const workspace = workspacesById.get(a.workspace_id) ?? null;
+      const siteName = workspace ? sites.find((s) => s.id === workspace.site_id)?.name : null;
+      result.push({ employee, workspace, siteName });
+    }
+    return result;
+  }, [directoryEmployees, directoryWorkspaces, directoryAssignments, sites]);
 
   return (
     <header className="flex h-[70px] items-center gap-3 border-b border-slate-200 bg-white px-6">
@@ -68,6 +89,40 @@ export default function TopBar({
         >
           🎫 Ticket Desk
         </button>
+      )}
+      {canEdit && flagged.length > 0 && (
+        <div className="relative">
+          <button
+            className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-700 hover:bg-orange-100"
+            onClick={() => setFlaggedOpen((v) => !v)}
+          >
+            ⚠ Flagged ({flagged.length})
+          </button>
+          {flaggedOpen && (
+            <ul className="absolute right-0 top-full z-30 mt-1 w-72 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+              <li className="border-b border-slate-100 px-3 py-2 text-xs text-slate-500">
+                Should be unassigned — no longer active but still seated
+              </li>
+              {flagged.map(({ employee, workspace, siteName }) => (
+                <li key={employee.id}>
+                  <button
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setFlaggedOpen(false);
+                      onSelectPerson?.(employee.id);
+                    }}
+                  >
+                    <span>{employee.name}</span>
+                    <span className="whitespace-nowrap text-xs text-slate-400">
+                      {workspace ? `${workspace.code}${siteName ? ` · ${siteName}` : ''}` : ''}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       <div className="relative">
         <button

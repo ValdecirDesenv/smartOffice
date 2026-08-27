@@ -3,7 +3,7 @@ import { PoolClient } from 'pg';
 import { withTransaction } from '../../db/transact';
 import { recordAudit } from '../../db/audit';
 import { getActorId } from '../../middleware/actor';
-import { fetchHubspotEmployees, isHubspotConfigured } from '../../lib/hubspot';
+import { fetchHubspotEmployees, isHubspotConfigured, HubspotEmployeeRow } from '../../lib/hubspot';
 
 function asNonEmptyString(v: unknown): string | null {
   return typeof v === 'string' && v.trim() ? v.trim() : null;
@@ -29,6 +29,43 @@ async function hasActiveAssignment(client: PoolClient, employeeId: string): Prom
     [employeeId]
   );
   return rows.length > 0;
+}
+
+// Archives every HubDB row marked former_employee into a table kept deliberately separate from
+// `employees` - this doesn't affect what happens to the main directory record (still
+// deleted/flagged exactly as before); it's just a standing record of everyone HubSpot has ever
+// reported as offboarded, for later use. Upserted by hubspot_row_id so re-syncing the same
+// person updates their record instead of duplicating it.
+async function recordOffboarded(
+  client: PoolClient,
+  row: HubspotEmployeeRow,
+  matchedEmployeeId: string | null
+): Promise<void> {
+  if (!row.id) return;
+  await client.query(
+    `INSERT INTO offboarded_employees
+       (hubspot_row_id, first_name, last_name, email, job_title, department, start_date,
+        termination_date, headshot_url, data, matched_employee_id, last_synced_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now())
+     ON CONFLICT (hubspot_row_id) DO UPDATE SET
+       first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, email=EXCLUDED.email,
+       job_title=EXCLUDED.job_title, department=EXCLUDED.department, start_date=EXCLUDED.start_date,
+       termination_date=EXCLUDED.termination_date, headshot_url=EXCLUDED.headshot_url,
+       data=EXCLUDED.data, matched_employee_id=EXCLUDED.matched_employee_id, last_synced_at=now()`,
+    [
+      row.id,
+      asNonEmptyString(row.values.first_name),
+      asNonEmptyString(row.values.last_name),
+      asNonEmptyString(row.values.email)?.toLowerCase() ?? null,
+      asNonEmptyString(row.values.role),
+      asNonEmptyString(row.values.department),
+      asNonEmptyString(row.values.start_date),
+      asNonEmptyString(row.values.termination_date),
+      asNonEmptyString(row.values.headshot_url),
+      JSON.stringify(row),
+      matchedEmployeeId,
+    ]
+  );
 }
 
 // department comes back from HubSpot already formatted like a team name ("Investment Team",
@@ -60,13 +97,27 @@ async function findOrCreateUnassignedSiteId(client: PoolClient): Promise<number>
 
 const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/sync-employees', async (request, reply) => {
-    if (!request.user!.is_admin) return reply.code(403).send({ error: 'Admin access required' });
+    // Narrower than the usual is_admin gate: this can delete employees (see the former-employee
+    // handling below), so it's restricted to the one account with can_sync_hubspot set, not every
+    // admin - see the 1700000800000_hubspot-sync-permission migration.
+    if (!request.user!.is_admin || !request.user!.can_sync_hubspot) {
+      return reply.code(403).send({ error: 'Not authorized to run the HubSpot sync' });
+    }
     if (!isHubspotConfigured()) {
       return reply.code(503).send({ error: 'HUBSPOT_ACCESS_TOKEN is not configured' });
     }
 
     const actorId = getActorId(request);
-    const rows = await fetchHubspotEmployees();
+    let rows;
+    try {
+      rows = await fetchHubspotEmployees();
+    } catch (err) {
+      request.log.error(err);
+      return reply.code(502).send({
+        error: 'Failed to fetch from HubSpot',
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     let matchedByEmail = 0;
     let matchedByName = 0;
@@ -76,6 +127,8 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
     let removedFormerEmployees = 0;
     let flaggedFormerEmployees = 0;
     let skippedFormerNoMatch = 0;
+    let offboardedRecorded = 0;
+    const errors: Array<{ row: string; message: string }> = [];
 
     for (const row of rows) {
       const email = asNonEmptyString(row.values.email)?.toLowerCase() ?? null;
@@ -101,7 +154,9 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
         continue;
       }
 
-      const matchedBy = await withTransaction(async (client): Promise<SyncResult> => {
+      let matchedBy: SyncResult;
+      try {
+        matchedBy = await withTransaction(async (client): Promise<SyncResult> => {
         let existing = null as Record<string, any> | null;
         let via: 'email' | 'name' | null = null;
 
@@ -132,6 +187,8 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
             via = 'name';
           }
         }
+
+        if (isFormer) await recordOffboarded(client, row, existing?.id ?? null);
 
         if (existing) {
           // A former employee with no active desk is no longer relevant to the directory - remove
@@ -204,7 +261,15 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
           source: 'hubspot_sync',
         });
         return { via: 'created' as const };
-      });
+        });
+      } catch (err) {
+        request.log.error(err);
+        errors.push({
+          row: fullName || email || row.id || 'unknown row',
+          message: err instanceof Error ? err.message : String(err),
+        });
+        continue;
+      }
 
       if (matchedBy.via === 'skippedFormerNoMatch') {
         skippedFormerNoMatch += 1;
@@ -219,6 +284,7 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
       } else {
         skippedNoName += 1;
       }
+      if (isFormer) offboardedRecorded += 1;
     }
 
     const updated = matchedByEmail + matchedByName;
@@ -233,6 +299,8 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
       removedFormerEmployees,
       flaggedFormerEmployees,
       skippedFormerNoMatch,
+      offboardedRecorded,
+      errors,
     };
   });
 };

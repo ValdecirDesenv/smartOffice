@@ -12,6 +12,7 @@ import type {
   User,
   ConfigSnapshot,
   DeskRequest,
+  HubspotSyncResult,
 } from '../types';
 
 export class ApiError extends Error {
@@ -173,5 +174,8 @@ export const api = {
     ) => request<DeskRequest>('POST', `/api/desk-requests/${id}/approve`, data),
     reject: (id: string, review_note?: string) =>
       request<DeskRequest>('POST', `/api/desk-requests/${id}/reject`, { review_note }),
+  },
+  hubspot: {
+    sync: () => request<HubspotSyncResult>('POST', '/api/hubspot/sync-employees'),
   },
 };

@@ -9,6 +9,7 @@ export interface AuthedUser {
   employee_id: string | null;
   is_admin: boolean;
   can_edit: boolean;
+  can_sync_hubspot: boolean;
 }
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -27,7 +28,7 @@ export async function getSessionUser(request: FastifyRequest): Promise<AuthedUse
   const token = request.cookies[SESSION_COOKIE_NAME];
   if (!token) return null;
   const { rows } = await pool.query(
-    `SELECT u.id, u.username, u.email, u.employee_id, u.is_admin, u.can_edit
+    `SELECT u.id, u.username, u.email, u.employee_id, u.is_admin, u.can_edit, u.can_sync_hubspot
      FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now()`,
     [hashToken(token)]
