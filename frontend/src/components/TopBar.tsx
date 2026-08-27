@@ -13,9 +13,16 @@ interface TopBarProps {
   onSearchChange: (value: string) => void;
   peopleMatches?: PersonMatch[];
   onSelectPerson?: (employeeId: string) => void;
+  onOpenTicketDesk?: () => void;
 }
 
-export default function TopBar({ search, onSearchChange, peopleMatches = [], onSelectPerson }: TopBarProps) {
+export default function TopBar({
+  search,
+  onSearchChange,
+  peopleMatches = [],
+  onSelectPerson,
+  onOpenTicketDesk,
+}: TopBarProps) {
   const { currentUser, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = currentUser?.username.slice(0, 2).toUpperCase() ?? '?';
@@ -54,6 +61,14 @@ export default function TopBar({ search, onSearchChange, peopleMatches = [], onS
       <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600" disabled>
         Today ▾
       </button>
+      {onOpenTicketDesk && (
+        <button
+          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          onClick={onOpenTicketDesk}
+        >
+          🎫 Ticket Desk
+        </button>
+      )}
       <div className="relative">
         <button
           className="grid h-[42px] w-[42px] place-items-center rounded-full bg-blue-100 font-bold text-blue-600"

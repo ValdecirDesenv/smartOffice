@@ -11,6 +11,7 @@ import type {
   WorkspaceAssignment,
   User,
   ConfigSnapshot,
+  DeskRequest,
 } from '../types';
 
 export class ApiError extends Error {
@@ -147,5 +148,30 @@ export const api = {
     overwrite: (id: string, name: string) => request<ConfigSnapshot>('PUT', `/api/config-snapshots/${id}`, { name }),
     restore: (id: string) => request<{ id: string; name: string }>('POST', `/api/config-snapshots/${id}/restore`),
     remove: (id: string) => request<void>('DELETE', `/api/config-snapshots/${id}`),
+  },
+  deskRequests: {
+    create: (data: {
+      workspace_id: string;
+      employee_id?: string;
+      requested_first_name?: string;
+      requested_last_name?: string;
+      requested_email?: string;
+      note?: string;
+    }) => request<DeskRequest>('POST', '/api/desk-requests', data),
+    list: (status?: string) => request<DeskRequest[]>('GET', `/api/desk-requests${query({ status })}`),
+    approve: (
+      id: string,
+      data: {
+        workspace_id?: string;
+        employee_id?: string;
+        first_name?: string;
+        last_name?: string;
+        email?: string;
+        job_title?: string;
+        team_id?: string;
+      } = {}
+    ) => request<DeskRequest>('POST', `/api/desk-requests/${id}/approve`, data),
+    reject: (id: string, review_note?: string) =>
+      request<DeskRequest>('POST', `/api/desk-requests/${id}/reject`, { review_note }),
   },
 };

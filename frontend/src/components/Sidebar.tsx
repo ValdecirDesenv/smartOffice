@@ -140,6 +140,11 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       <NavLink to="/people" className={navLinkClass}>
         People
       </NavLink>
+      {canEdit && (
+        <NavLink to="/desk-tickets" className={navLinkClass}>
+          Desk Tickets
+        </NavLink>
+      )}
       <div className="mt-1 block cursor-not-allowed rounded-lg px-3 py-2 text-sm text-slate-600">Bookings (soon)</div>
       <div className="mb-1 block cursor-not-allowed rounded-lg px-3 py-2 text-sm text-slate-600">Analytics (soon)</div>
       {currentUser?.is_admin && (

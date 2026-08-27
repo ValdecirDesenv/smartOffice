@@ -8,6 +8,7 @@ import FloorMapCanvas, { teamColors } from '../components/FloorMap/FloorMapCanva
 import WorkspaceDetailPanel from '../components/FloorMap/WorkspaceDetailPanel';
 import DeviceDetailPanel from '../components/FloorMap/DeviceDetailPanel';
 import LabelEditor from '../components/FloorMap/LabelEditor';
+import TicketDeskModal from '../components/FloorMap/TicketDeskModal';
 
 export default function FloorMapPage() {
   const {
@@ -43,6 +44,7 @@ export default function FloorMapPage() {
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [ticketDeskOpen, setTicketDeskOpen] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newFloorName, setNewFloorName] = useState('');
 
@@ -439,7 +441,14 @@ export default function FloorMapPage() {
 
   return (
     <>
-      <TopBar search={search} onSearchChange={setSearch} peopleMatches={peopleMatches} onSelectPerson={handleSelectPerson} />
+      <TopBar
+        search={search}
+        onSearchChange={setSearch}
+        peopleMatches={peopleMatches}
+        onSelectPerson={handleSelectPerson}
+        onOpenTicketDesk={() => setTicketDeskOpen(true)}
+      />
+      {ticketDeskOpen && <TicketDeskModal onClose={() => setTicketDeskOpen(false)} />}
       <div className={`grid gap-3 p-4 ${editing ? 'grid-cols-[minmax(0,1fr)_300px]' : 'grid-cols-[minmax(0,1fr)]'}`}>
         <div className="min-w-0">
           <h1 className="text-lg font-bold">

@@ -7,6 +7,7 @@ import FloorMapPage from './pages/FloorMapPage';
 import PeoplePage from './pages/PeoplePage';
 import UsersPage from './pages/UsersPage';
 import ConfigSnapshotsPage from './pages/ConfigSnapshotsPage';
+import DeskTicketsPage from './pages/DeskTicketsPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -67,6 +68,7 @@ function AppRoutes() {
             <Route path="/people" element={<PeoplePage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/config-snapshots" element={<ConfigSnapshotsPage />} />
+            <Route path="/desk-tickets" element={<DeskTicketsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

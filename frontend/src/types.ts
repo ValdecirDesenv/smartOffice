@@ -111,3 +111,27 @@ export interface ConfigSnapshot {
   workspaces_count: number;
   employees_count: number;
 }
+
+export type DeskRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface DeskRequest {
+  id: string;
+  status: DeskRequestStatus;
+  note: string | null;
+  requested_email: string | null;
+  requested_first_name: string | null;
+  requested_last_name: string | null;
+  requested_by_username: string;
+  created_at: string;
+  reviewed_by_username: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+  site_id: string;
+  site_name: string;
+  floor_id: string;
+  floor_name: string;
+  workspace_id: string;
+  workspace_code: string;
+  employee_id: string | null;
+  employee_name: string | null;
+}

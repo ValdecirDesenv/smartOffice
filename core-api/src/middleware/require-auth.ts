@@ -57,7 +57,14 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
 
   // Guests (can_edit: false) can view everything but not mutate it. Admins always bypass this -
   // is_admin implies edit rights regardless of the can_edit flag.
-  if (!user.is_admin && !user.can_edit && MUTATING_METHODS.has(request.method)) {
+  //
+  // One deliberate exception: submitting a desk-assignment ticket is the one write any logged-in
+  // user (including a guest) is allowed to make - it doesn't touch the real directory/assignment
+  // data, only a pending request an admin/member later reviews. Every other verb on
+  // /api/desk-requests (list, approve, reject) stays behind its own is_admin/can_edit check
+  // inside the route itself, same as every other admin-gated module.
+  const isGuestTicketSubmission = request.method === 'POST' && request.url === '/api/desk-requests';
+  if (!user.is_admin && !user.can_edit && MUTATING_METHODS.has(request.method) && !isGuestTicketSubmission) {
     reply.code(403).send({ error: 'Read-only access' });
   }
 }
