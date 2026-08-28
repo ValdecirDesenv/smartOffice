@@ -3,11 +3,21 @@ import { Device, DeviceType, Employee, Workspace, WorkspaceStatus, WorkspaceType
 
 const STATUS_OPTIONS: WorkspaceStatus[] = ['available', 'occupied', 'reserved', 'assigned', 'inactive'];
 
+export interface EmployeeCandidate {
+  employee: Employee;
+  // Where this person is currently seated, if anywhere (app-wide, not just this floor/office) -
+  // null means they're free to assign here directly.
+  currentDesk: { code: string; siteName: string } | null;
+}
+
 interface WorkspaceDetailPanelProps {
   workspace: Workspace;
   workspaceTypes: WorkspaceType[];
   assignedEmployee: Employee | null;
-  unassignedEmployees: Employee[];
+  // App-wide (every office, not just this one), including people who already have a desk
+  // elsewhere - shown but not directly assignable, so searching for someone who exists but is
+  // seated elsewhere finds them instead of looking like they don't exist at all.
+  employeeCandidates: EmployeeCandidate[];
   devices: Device[];
   deviceTypes: DeviceType[];
   onUpdate: (patch: Partial<Workspace>) => void;
@@ -23,7 +33,7 @@ export default function WorkspaceDetailPanel({
   workspace,
   workspaceTypes,
   assignedEmployee,
-  unassignedEmployees,
+  employeeCandidates,
   devices,
   deviceTypes,
   onUpdate,
@@ -38,8 +48,8 @@ export default function WorkspaceDetailPanel({
   const [newDeviceName, setNewDeviceName] = useState('');
   const [newEmployeeName, setNewEmployeeName] = useState('');
   const employeeMatches = newEmployeeName.trim()
-    ? unassignedEmployees
-        .filter((e) => e.name.toLowerCase().includes(newEmployeeName.trim().toLowerCase()))
+    ? employeeCandidates
+        .filter((c) => c.employee.name.toLowerCase().includes(newEmployeeName.trim().toLowerCase()))
         .slice(0, 8)
     : [];
   const [posXText, setPosXText] = useState(String(workspace.pos_x ?? 0));
@@ -183,17 +193,30 @@ export default function WorkspaceDetailPanel({
             />
             {newEmployeeName.trim() && (
               <ul className="absolute left-0 top-full z-20 mt-1 w-full rounded-md border border-slate-200 bg-white py-1 text-sm shadow-lg">
-                {employeeMatches.map((e) => (
+                {employeeMatches.map(({ employee: e, currentDesk }) => (
                   <li key={e.id}>
                     <button
-                      className="block w-full px-3 py-1.5 text-left hover:bg-slate-50"
+                      className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left ${
+                        currentDesk ? 'text-slate-400' : 'hover:bg-slate-50'
+                      }`}
                       onMouseDown={(ev) => {
                         ev.preventDefault();
+                        if (currentDesk) {
+                          window.alert(
+                            `${e.name} is already assigned to desk ${currentDesk.code}${
+                              currentDesk.siteName ? ` at ${currentDesk.siteName}` : ''
+                            }. Unassign them from there first if you want to seat them here instead.`
+                          );
+                          return;
+                        }
                         onAssign(e.id);
                         setNewEmployeeName('');
                       }}
                     >
-                      {e.name}
+                      <span>{e.name}</span>
+                      <span className="whitespace-nowrap text-xs text-slate-400">
+                        {currentDesk ? `⚠ ${currentDesk.code}${currentDesk.siteName ? ` · ${currentDesk.siteName}` : ''}` : ''}
+                      </span>
                     </button>
                   </li>
                 ))}

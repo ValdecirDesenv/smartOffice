@@ -123,7 +123,7 @@ sequenceDiagram
             API->>DB: UPDATE name/job_title/team/status/hubspot_data
         else no local match
             alt row has a name
-                API->>DB: INSERT into "Unassigned" placeholder site
+                API->>DB: INSERT with site_id NULL
             end
         end
         Note over API,DB: status.id "2" (former employee):<br/>DELETE if no active desk,<br/>else flag status='inactive'
@@ -133,7 +133,7 @@ sequenceDiagram
 
 Key rules baked into this route (`core-api/src/modules/hubspot/hubspot.routes.ts`):
 - **Matching** tries email first, then an exact-name fallback (only against local employees with no email on file, and only when the name is unambiguous) — first with legal first+last name, then with `preferred_name`+last name, so someone recorded locally under a nickname still matches.
-- **Unmatched rows with a name** are created as new employees in a placeholder `"Unassigned"` site (find-or-create) rather than guessing a real office.
+- **Unmatched rows with a name** are created as new employees with `site_id NULL` (`employees.site_id` is nullable) rather than guessing a real office or inventing a placeholder one — they show up in the People page's "All Offices" view and can be assigned to a real office/desk directly from any Floor Map, which sets their site.
 - **Former employees** (`status.id === "2"`) are removed outright if they have no active desk, or left in place but flagged (`status='inactive'`) if they do — surfaced on the Floor Map as a distinct-colored desk border (`FloorMapCanvas.tsx`'s `FLAGGED_*` styling).
 - Nothing is ever pushed *to* HubSpot — this integration is strictly read-only against HubDB.
 

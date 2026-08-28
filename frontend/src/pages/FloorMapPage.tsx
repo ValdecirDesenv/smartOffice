@@ -35,7 +35,6 @@ export default function FloorMapPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [labels, setLabels] = useState<Label[]>([]);
   const [assignments, setAssignments] = useState<WorkspaceAssignment[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [workspaceTypes, setWorkspaceTypes] = useState<WorkspaceType[]>([]);
@@ -62,7 +61,6 @@ export default function FloorMapPage() {
 
   useEffect(() => {
     if (!currentSite) return;
-    api.employees.list({ siteId: currentSite.id }).then(setEmployees);
     api.devices.list({ siteId: currentSite.id }).then(setDevices);
     api.teams.list(currentSite.id).then(setTeams);
   }, [currentSite]);
@@ -113,10 +111,10 @@ export default function FloorMapPage() {
     return workspaces.filter((w) => {
       if (w.code.toLowerCase().includes(q)) return true;
       const assignment = assignments.find((a) => a.workspace_id === w.id);
-      const employee = assignment && employees.find((e) => e.id === assignment.employee_id);
+      const employee = assignment && directoryEmployees.find((e) => e.id === assignment.employee_id);
       return employee?.name.toLowerCase().includes(q) ?? false;
     });
-  }, [workspaces, search, assignments, employees]);
+  }, [workspaces, search, assignments, directoryEmployees]);
 
   // Local-floor lookup, used only by the on-canvas search-filter below (filteredWorkspaces).
   const employeeWorkspace = useMemo(() => {
@@ -131,13 +129,13 @@ export default function FloorMapPage() {
   // Desks whose occupant is flagged inactive (e.g. a former employee per the HubSpot sync) -
   // rendered in a distinct warning color on the map so it's clear the desk should be unassigned.
   const flaggedWorkspaceIds = useMemo(() => {
-    const inactiveEmployeeIds = new Set(employees.filter((e) => e.status === 'inactive').map((e) => e.id));
+    const inactiveEmployeeIds = new Set(directoryEmployees.filter((e) => e.status === 'inactive').map((e) => e.id));
     const ids = new Set<string>();
     for (const a of assignments) {
       if (inactiveEmployeeIds.has(a.employee_id)) ids.add(a.workspace_id);
     }
     return ids;
-  }, [assignments, employees]);
+  }, [assignments, directoryEmployees]);
 
   // Stable team -> border color assignment: ordered by team id so a given team keeps the same
   // color across renders (and, since teams are site-scoped, across every floor in this site).
@@ -146,7 +144,7 @@ export default function FloorMapPage() {
   // Desks whose assigned employee belongs to a team - lets desks for the same team be spotted at
   // a glance via border color, regardless of the desk's own status fill.
   const teamBorderClass = useMemo(() => {
-    const employeeTeam = new Map(employees.map((e) => [e.id, e.team_id]));
+    const employeeTeam = new Map(directoryEmployees.map((e) => [e.id, e.team_id]));
     const map = new Map<string, string>();
     for (const a of assignments) {
       const teamId = employeeTeam.get(a.employee_id);
@@ -155,11 +153,11 @@ export default function FloorMapPage() {
       if (colors) map.set(a.workspace_id, colors.border);
     }
     return map;
-  }, [assignments, employees, orderedTeamIds]);
+  }, [assignments, directoryEmployees, orderedTeamIds]);
 
   // Only the teams actually seated on this floor, for the legend below the map.
   const legendTeams = useMemo(() => {
-    const employeeTeam = new Map(employees.map((e) => [e.id, e.team_id]));
+    const employeeTeam = new Map(directoryEmployees.map((e) => [e.id, e.team_id]));
     const assignedTeamIds = new Set<string>();
     for (const a of assignments) {
       const teamId = employeeTeam.get(a.employee_id);
@@ -169,7 +167,7 @@ export default function FloorMapPage() {
       .filter((t) => assignedTeamIds.has(t.id))
       .map((t) => ({ id: t.id, name: t.name, colors: teamColors(t.id, orderedTeamIds) }))
       .filter((t): t is { id: string; name: string; colors: { border: string; bg: string } } => Boolean(t.colors));
-  }, [assignments, employees, teams, orderedTeamIds]);
+  }, [assignments, directoryEmployees, teams, orderedTeamIds]);
 
   // App-wide lookup (every site/floor, not just the one currently open) so the search box can
   // find and jump to a person regardless of where they're actually seated.
@@ -233,10 +231,26 @@ export default function FloorMapPage() {
   const selectedAssignment = selectedWorkspace
     ? assignments.find((a) => a.workspace_id === selectedWorkspace.id) ?? null
     : null;
-  const assignedEmployee = selectedAssignment ? employees.find((e) => e.id === selectedAssignment.employee_id) ?? null : null;
+  const assignedEmployee = selectedAssignment ? directoryEmployees.find((e) => e.id === selectedAssignment.employee_id) ?? null : null;
   const assignedEmployeeTeam = assignedEmployee ? teams.find((t) => t.id === assignedEmployee.team_id) ?? null : null;
-  const assignedEmployeeIds = new Set(assignments.map((a) => a.employee_id));
-  const unassignedEmployees = employees.filter((e) => !assignedEmployeeIds.has(e.id));
+  // App-wide (every office), not just this one - so anyone can be found and seated on any
+  // floor's map directly, including people HubSpot synced with no office at all (site_id null).
+  // People who already have a desk elsewhere are still included (so searching for them finds
+  // them instead of looking like they don't exist), just marked with where they currently sit -
+  // WorkspaceDetailPanel blocks assigning them directly and explains why.
+  const employeeCandidates = useMemo(() => {
+    const activeAssignmentByEmployee = new Map(
+      directoryAssignments.filter((a) => !a.unassigned_at).map((a) => [a.employee_id, a])
+    );
+    return directoryEmployees.map((e) => {
+      const a = activeAssignmentByEmployee.get(e.id);
+      const w = a ? directoryWorkspaces.find((ws) => ws.id === a.workspace_id) : null;
+      return {
+        employee: e,
+        currentDesk: w ? { code: w.code, siteName: sites.find((s) => s.id === w.site_id)?.name ?? '' } : null,
+      };
+    });
+  }, [directoryEmployees, directoryAssignments, directoryWorkspaces, sites]);
   const workspaceDevices = selectedWorkspace ? devices.filter((d) => d.workspace_id === selectedWorkspace.id) : [];
 
   if (loading) return <div className="p-6 text-sm text-slate-500">Loading…</div>;
@@ -379,7 +393,6 @@ export default function FloorMapPage() {
   async function handleCreateAndAssign(name: string) {
     if (!selectedWorkspace || !currentSite) return;
     const created = await api.employees.create({ site_id: currentSite.id, name });
-    setEmployees((prev) => [...prev, created]);
     await api.assignments.create({ workspace_id: selectedWorkspace.id, employee_id: created.id });
     await reloadFloorData();
   }
@@ -537,7 +550,7 @@ export default function FloorMapPage() {
                 workspace={selectedWorkspace}
                 workspaceTypes={workspaceTypes}
                 assignedEmployee={assignedEmployee}
-                unassignedEmployees={unassignedEmployees}
+                employeeCandidates={employeeCandidates}
                 devices={workspaceDevices}
                 deviceTypes={deviceTypes}
                 onUpdate={handleUpdateWorkspace}

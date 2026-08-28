@@ -85,16 +85,6 @@ async function findOrCreateTeamId(client: PoolClient, siteId: number, teamName: 
   return created[0].id;
 }
 
-// HubSpot rows with no matching local employee land here rather than one of the real offices,
-// since nothing in the synced fields says which office a person actually belongs to - a human
-// moves them to the correct office later via the People page.
-async function findOrCreateUnassignedSiteId(client: PoolClient): Promise<number> {
-  const { rows: existing } = await client.query("SELECT id FROM sites WHERE name = 'Unassigned'");
-  if (existing[0]) return existing[0].id;
-  const { rows: created } = await client.query("INSERT INTO sites (name) VALUES ('Unassigned') RETURNING id");
-  return created[0].id;
-}
-
 const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/sync-employees', async (request, reply) => {
     // Narrower than the usual is_admin gate: this can delete employees (see the former-employee
@@ -209,7 +199,10 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
             return { via, removed: true };
           }
 
-          const teamId = department ? await findOrCreateTeamId(client, existing.site_id, department) : null;
+          // Teams are site-scoped, so a person with no site yet can't have a team resolved either
+          // - it waits until they're placed in a real office.
+          const teamId =
+            department && existing.site_id ? await findOrCreateTeamId(client, existing.site_id, department) : null;
           const status = isFormer ? 'inactive' : 'active';
 
           const { rows: updatedRows } = await client.query(
@@ -243,16 +236,18 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
         if (!fullName) return { via: 'skippedNoName' as const };
         if (isFormer) return { via: 'skippedFormerNoMatch' as const };
 
-        const unassignedSiteId = await findOrCreateUnassignedSiteId(client);
-        const teamId = department ? await findOrCreateTeamId(client, unassignedSiteId, department) : null;
-
+        // Nothing in the synced fields says which office this person actually belongs to, so
+        // they're created with no site at all rather than a placeholder office - they show up in
+        // the People list (via "All Offices") ready to be assigned to a real office or desk
+        // whenever a human decides where they go. Teams are site-scoped, so team_id has to wait
+        // for that too.
         const { rows: createdRows } = await client.query(
           `INSERT INTO employees (site_id, team_id, name, email, job_title, status, hubspot_row_id, hubspot_data, hubspot_synced_at)
-           VALUES ($1,$2,$3,$4,$5,'active',$6,$7,now()) RETURNING *`,
-          [unassignedSiteId, teamId, fullName, email, jobTitle, row.id, JSON.stringify(row.values)]
+           VALUES (NULL,NULL,$1,$2,$3,'active',$4,$5,now()) RETURNING *`,
+          [fullName, email, jobTitle, row.id, JSON.stringify(row.values)]
         );
         await recordAudit(client, {
-          siteId: unassignedSiteId,
+          siteId: null,
           entityType: 'employee',
           entityId: createdRows[0].id,
           action: 'create',

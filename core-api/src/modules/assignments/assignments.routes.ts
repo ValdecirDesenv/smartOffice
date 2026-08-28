@@ -48,17 +48,44 @@ const assignmentsRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Assign an employee to a workspace. Fails with 409 if either already has an active assignment
   // (one active desk per employee, one active employee per desk) - unassign first to reassign.
+  // The employee picker in the UI now offers everyone app-wide, not just people already in this
+  // site, so assigning someone from a different office (or someone HubSpot synced with no office
+  // at all - site_id NULL) sets/moves their employee record's site to this desk's office too -
+  // "seated here" and "belongs to this office" have to agree. Their old team doesn't carry over
+  // (teams are per-site), so it's cleared rather than left pointing at a team from elsewhere.
   fastify.post('/', { schema: { body: bodySchema } }, async (request, reply) => {
     const body = request.body as AssignmentBody;
     const actorId = getActorId(request);
     const row = await withTransaction(async (client) => {
+      const workspaceSiteId = await siteIdForWorkspace(client, body.workspace_id);
+
+      const { rows: employeeRows } = await client.query('SELECT * FROM employees WHERE id = $1 FOR UPDATE', [
+        body.employee_id,
+      ]);
+      const employee = employeeRows[0];
+      if (employee && workspaceSiteId != null && employee.site_id !== workspaceSiteId) {
+        const { rows: movedRows } = await client.query(
+          `UPDATE employees SET site_id=$1, team_id=NULL, updated_at=now() WHERE id=$2 RETURNING *`,
+          [workspaceSiteId, body.employee_id]
+        );
+        await recordAudit(client, {
+          siteId: workspaceSiteId,
+          entityType: 'employee',
+          entityId: body.employee_id,
+          action: 'update',
+          oldValues: employee,
+          newValues: movedRows[0],
+          actorId,
+        });
+      }
+
       const { rows } = await client.query(
         `INSERT INTO workspace_assignments (workspace_id, employee_id) VALUES ($1,$2) RETURNING *`,
         [body.workspace_id, body.employee_id]
       );
       await client.query(`UPDATE workspaces SET status='assigned', updated_at=now() WHERE id = $1`, [body.workspace_id]);
       await recordAudit(client, {
-        siteId: await siteIdForWorkspace(client, body.workspace_id),
+        siteId: workspaceSiteId,
         entityType: 'workspace_assignment',
         entityId: rows[0].id,
         action: 'create',

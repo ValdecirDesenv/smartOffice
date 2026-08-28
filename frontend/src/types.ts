@@ -49,7 +49,9 @@ export interface Team {
 
 export interface Employee {
   id: string;
-  site_id: string;
+  // Null for someone HubSpot doesn't say a real office for yet - they exist in the directory
+  // ready to be assigned to any office/desk, rather than living in a placeholder office.
+  site_id: string | null;
   team_id: string | null;
   name: string;
   email: string | null;

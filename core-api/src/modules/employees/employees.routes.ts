@@ -45,7 +45,7 @@ const employeesRoutes: FastifyPluginAsync = async (fastify) => {
     // meant for the frontend) - only headshot_url is pulled out of it, for the Floor Map's desk
     // popover photo.
     const { rows } = await pool.query(
-      `SELECT *, hubspot_data->>'headshot_url' AS headshot_url FROM employees ${where} ORDER BY id`,
+      `SELECT *, hubspot_data->>'headshot_url' AS headshot_url FROM employees ${where} ORDER BY lower(name)`,
       values
     );
     return rows;
