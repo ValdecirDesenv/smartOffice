@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { PoolClient } from 'pg';
+import { pool } from '../../db/pool';
 import { withTransaction } from '../../db/transact';
 import { recordAudit } from '../../db/audit';
 import { getActorId } from '../../middleware/actor';
@@ -297,6 +298,21 @@ const hubspotRoutes: FastifyPluginAsync = async (fastify) => {
       offboardedRecorded,
       errors,
     };
+  });
+
+  // Same restricted access as the sync itself - this is the archive it writes to, not a general
+  // admin/member view.
+  fastify.get('/offboarded', async (request, reply) => {
+    if (!request.user!.is_admin || !request.user!.can_sync_hubspot) {
+      return reply.code(403).send({ error: 'Not authorized' });
+    }
+    const { rows } = await pool.query(
+      `SELECT id, first_name, last_name, email, job_title, department, start_date, termination_date,
+              headshot_url, matched_employee_id, first_synced_at, last_synced_at
+       FROM offboarded_employees
+       ORDER BY last_synced_at DESC`
+    );
+    return rows;
   });
 };
 

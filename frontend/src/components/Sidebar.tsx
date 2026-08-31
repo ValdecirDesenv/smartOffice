@@ -157,6 +157,11 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           Config Snapshots
         </NavLink>
       )}
+      {currentUser?.can_sync_hubspot && (
+        <NavLink to="/offboarded" className={navLinkClass}>
+          Offboarded
+        </NavLink>
+      )}
 
       {floorStats && currentFloor && (
         <div className="mt-4 rounded-lg border border-slate-800">

@@ -13,6 +13,7 @@ import type {
   ConfigSnapshot,
   DeskRequest,
   HubspotSyncResult,
+  OffboardedEmployee,
 } from '../types';
 
 export class ApiError extends Error {
@@ -177,5 +178,6 @@ export const api = {
   },
   hubspot: {
     sync: () => request<HubspotSyncResult>('POST', '/api/hubspot/sync-employees'),
+    offboarded: () => request<OffboardedEmployee[]>('GET', '/api/hubspot/offboarded'),
   },
 };

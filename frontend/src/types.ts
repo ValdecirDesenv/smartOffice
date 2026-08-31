@@ -118,6 +118,23 @@ export interface HubspotSyncResult {
   errors: Array<{ row: string; message: string }>;
 }
 
+export interface OffboardedEmployee {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  job_title: string | null;
+  department: string | null;
+  start_date: string | null;
+  termination_date: string | null;
+  headshot_url: string | null;
+  // Set only while they're still on the People list (flagged, still has a desk) - null means
+  // they were removed from the People list entirely (or never existed locally to begin with).
+  matched_employee_id: string | null;
+  first_synced_at: string;
+  last_synced_at: string;
+}
+
 export interface ConfigSnapshot {
   id: string;
   name: string;
