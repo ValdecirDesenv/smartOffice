@@ -472,7 +472,7 @@ export default function FloorMapCanvas({
               id={`workspace-${w.id}`}
               title={flagged ? 'Assigned employee is no longer active - this desk should be unassigned' : undefined}
               onPointerDown={startDrag('workspace', w.id, Number(w.pos_x ?? 0), Number(w.pos_y ?? 0))}
-              className={`absolute flex items-center justify-center overflow-hidden rounded border-2 font-bold leading-none ${fill} ${border} ${
+              className={`absolute flex items-center justify-center overflow-hidden rounded border-[3px] font-bold leading-none ${fill} ${border} ${
                 editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-150'
               } ${w.id === selectedWorkspaceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
               style={{

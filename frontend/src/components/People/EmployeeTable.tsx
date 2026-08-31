@@ -21,6 +21,7 @@ export default function EmployeeTable({ employees, teams, readOnly = false, site
     <table className="w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-sm">
       <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
         <tr>
+          <th className="px-4 py-2" />
           <th className="px-4 py-2">Name</th>
           <th className="px-4 py-2">Email</th>
           <th className="px-4 py-2">Job title</th>
@@ -33,7 +34,7 @@ export default function EmployeeTable({ employees, teams, readOnly = false, site
         {employees.map((emp) =>
           !readOnly && editingId === emp.id ? (
             <tr key={emp.id}>
-              <td colSpan={sites ? 6 : 5} className="p-2">
+              <td colSpan={sites ? 7 : 6} className="p-2">
                 <EmployeeForm
                   initial={emp}
                   teams={teams}
@@ -48,6 +49,17 @@ export default function EmployeeTable({ employees, teams, readOnly = false, site
             </tr>
           ) : (
             <tr key={emp.id} className="border-t border-slate-100">
+              <td className="px-4 py-2">
+                {emp.headshot_url ? (
+                  <img
+                    src={emp.headshot_url}
+                    alt={emp.name}
+                    className="h-8 w-8 rounded-full border-2 border-slate-400 object-cover"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full border-2 border-slate-200 bg-slate-100" />
+                )}
+              </td>
               <td className="px-4 py-2">{emp.name}</td>
               <td className="px-4 py-2 text-slate-500">{emp.email}</td>
               <td className="px-4 py-2 text-slate-500">{emp.job_title}</td>
@@ -72,7 +84,7 @@ export default function EmployeeTable({ employees, teams, readOnly = false, site
         )}
         {employees.length === 0 && (
           <tr>
-            <td colSpan={sites ? 6 : 5} className="px-4 py-6 text-center text-slate-400">
+            <td colSpan={sites ? 7 : 6} className="px-4 py-6 text-center text-slate-400">
               No employees yet.
             </td>
           </tr>
