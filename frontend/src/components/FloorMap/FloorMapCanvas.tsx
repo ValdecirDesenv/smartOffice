@@ -27,6 +27,12 @@ const STATUS_BORDER_STYLES: Record<string, string> = {
 const FLAGGED_FILL = 'bg-orange-100 text-orange-800';
 const FLAGGED_BORDER = 'border-orange-500';
 
+// Fill used by the "Show Names" view toggle for a desk that has someone assigned - white so the
+// name reads clearly regardless of what status/team/flagged color the border is carrying. Border
+// is left as whatever it would normally be (team color takes priority, else flagged, else status)
+// so that signal isn't lost just because name mode is on.
+const NAME_FILL = 'bg-white text-slate-900';
+
 // Border/dot colors used to show which team a desk's assigned employee belongs to. Deliberately
 // avoids every hue already used above (emerald/red/amber/indigo/orange/slate) so a team color
 // never gets mistaken for a status or the "should be unassigned" flag. Written out as complete
@@ -135,6 +141,12 @@ interface FloorMapCanvasProps {
   // Workspace id -> border color class, for desks whose assigned employee belongs to a team -
   // lets desks for the same team be spotted at a glance regardless of their status fill.
   teamBorderClass?: Map<string, string>;
+  // "Show Names" view toggle: when on, a desk with an assigned employee (per assignedNames below)
+  // displays their first name on a white box instead of its code, leaving unassigned desks as-is.
+  showNames?: boolean;
+  // Workspace id -> the assigned employee's first/full name - first is what's drawn in the box,
+  // full is the hover tooltip. Only consulted when showNames is true.
+  assignedNames?: Map<string, { first: string; full: string }>;
 }
 
 const POPOVER_WIDTH = 256;
@@ -161,6 +173,8 @@ export default function FloorMapCanvas({
   selectedWorkspaceDevices,
   flaggedWorkspaceIds,
   teamBorderClass,
+  showNames,
+  assignedNames,
 }: FloorMapCanvasProps) {
   const floorRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragTarget | null>(null);
@@ -464,15 +478,21 @@ export default function FloorMapCanvas({
 
         {workspaces.map((w) => {
           const flagged = flaggedWorkspaceIds?.has(w.id) ?? false;
-          const fill = flagged ? FLAGGED_FILL : STATUS_FILL_STYLES[w.status];
+          const nameInfo = showNames ? assignedNames?.get(w.id) : undefined;
+          const fill = nameInfo ? NAME_FILL : flagged ? FLAGGED_FILL : STATUS_FILL_STYLES[w.status];
           const border = flagged ? FLAGGED_BORDER : teamBorderClass?.get(w.id) ?? STATUS_BORDER_STYLES[w.status];
+          const title = flagged
+            ? 'Assigned employee is no longer active - this desk should be unassigned'
+            : nameInfo?.full;
           return (
             <button
               key={w.id}
               id={`workspace-${w.id}`}
-              title={flagged ? 'Assigned employee is no longer active - this desk should be unassigned' : undefined}
+              title={title}
               onPointerDown={startDrag('workspace', w.id, Number(w.pos_x ?? 0), Number(w.pos_y ?? 0))}
-              className={`absolute flex items-center justify-center overflow-hidden rounded border-[3px] font-bold leading-none ${fill} ${border} ${
+              className={`absolute flex items-center justify-center overflow-hidden whitespace-nowrap rounded border-[3px] font-bold leading-none ${
+                nameInfo ? 'px-0.5' : ''
+              } ${fill} ${border} ${
                 editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer hover:z-20 hover:scale-150'
               } ${w.id === selectedWorkspaceId ? 'z-20 ring-2 ring-slate-900' : ''}`}
               style={{
@@ -480,10 +500,12 @@ export default function FloorMapCanvas({
                 top: `${w.pos_y ?? 0}%`,
                 width: editing ? px(24) : px(36),
                 height: editing ? px(24) : px(32),
-                fontSize: editing ? px(7) : px(10),
+                // Names run longer than desk codes, so they get a smaller size than the code/non-name
+                // case to actually fit the (unchanged) box width instead of clipping edge-to-edge.
+                fontSize: nameInfo ? (editing ? px(6) : px(8)) : editing ? px(7) : px(10),
               }}
             >
-              {w.code}
+              {nameInfo ? nameInfo.first : w.code}
             </button>
           );
         })}

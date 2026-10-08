@@ -45,6 +45,7 @@ export default function FloorMapPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [ticketDeskOpen, setTicketDeskOpen] = useState(false);
+  const [showNames, setShowNames] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newFloorName, setNewFloorName] = useState('');
 
@@ -154,6 +155,20 @@ export default function FloorMapPage() {
     }
     return map;
   }, [assignments, directoryEmployees, orderedTeamIds]);
+
+  // Workspace -> assigned employee's name, split into first/full - only consulted by
+  // FloorMapCanvas when the "Show Names" toggle below is on. `assignments` is already
+  // active-assignments-only (the API filters out unassigned_at rows by default).
+  const assignedNames = useMemo(() => {
+    const map = new Map<string, { first: string; full: string }>();
+    for (const a of assignments) {
+      const employee = directoryEmployees.find((e) => e.id === a.employee_id);
+      if (!employee) continue;
+      const first = employee.name.trim().split(/\s+/)[0] || employee.name;
+      map.set(a.workspace_id, { first, full: employee.name });
+    }
+    return map;
+  }, [assignments, directoryEmployees]);
 
   // Only the teams actually seated on this floor, for the legend below the map.
   const legendTeams = useMemo(() => {
@@ -470,10 +485,22 @@ export default function FloorMapPage() {
       {ticketDeskOpen && <TicketDeskModal onClose={() => setTicketDeskOpen(false)} />}
       <div className={`grid gap-3 p-4 ${editing ? 'grid-cols-[minmax(0,1fr)_300px]' : 'grid-cols-[minmax(0,1fr)]'}`}>
         <div className="min-w-0">
-          <h1 className="text-lg font-bold">
-            {currentSite.name} · {currentFloor.name}
-          </h1>
-          <p className="mb-2 mt-0.5 text-xs text-slate-500">Interactive workplace map · Live workspace status</p>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-bold">
+                {currentSite.name} · {currentFloor.name}
+              </h1>
+              <p className="mt-0.5 text-xs text-slate-500">Interactive workplace map · Live workspace status</p>
+            </div>
+            <button
+              className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-medium ${
+                showNames ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-600'
+              }`}
+              onClick={() => setShowNames((v) => !v)}
+            >
+              {showNames ? '✓ Showing Names' : '👤 Show Names'}
+            </button>
+          </div>
 
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             {editing && (
@@ -524,6 +551,8 @@ export default function FloorMapPage() {
               selectedWorkspaceDevices={workspaceDevices}
               flaggedWorkspaceIds={flaggedWorkspaceIds}
               teamBorderClass={teamBorderClass}
+              showNames={showNames}
+              assignedNames={assignedNames}
             />
 
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-200 px-3.5 py-2.5 text-xs text-slate-500">
