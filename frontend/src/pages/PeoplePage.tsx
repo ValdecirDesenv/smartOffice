@@ -6,8 +6,12 @@ import { Employee, HubspotSyncResult, Team } from '../types';
 import EmployeeForm from '../components/People/EmployeeForm';
 import EmployeeTable from '../components/People/EmployeeTable';
 
+function csvField(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
 export default function PeoplePage() {
-  const { currentSite, sites } = useApp();
+  const { currentSite, sites, directoryEmployees, directoryWorkspaces, directoryAssignments } = useApp();
   const { canEdit, currentUser } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -61,6 +65,48 @@ export default function PeoplePage() {
     }
   }
 
+  // App-wide (every office's active assignments), independent of the This Office/All Offices
+  // toggle above - a seating export wouldn't be very useful scoped to just one office.
+  async function handleExportSeating() {
+    const floors = await api.floors.list();
+    const floorById = new Map(floors.map((f) => [f.id, f]));
+    const workspaceById = new Map(directoryWorkspaces.map((w) => [w.id, w]));
+    const employeeById = new Map(directoryEmployees.map((e) => [e.id, e]));
+    const siteById = new Map(sites.map((s) => [s.id, s]));
+
+    const rows = directoryAssignments
+      .filter((a) => !a.unassigned_at)
+      .map((a) => {
+        const workspace = workspaceById.get(a.workspace_id);
+        const employee = employeeById.get(a.employee_id);
+        const floor = workspace ? floorById.get(workspace.floor_id) : undefined;
+        const site = workspace ? siteById.get(workspace.site_id) : undefined;
+        return {
+          seatLocation: site?.name ?? '',
+          seatFloor: floor?.name ?? '',
+          seatNumber: workspace?.code ?? '',
+          people: employee?.name ?? '',
+        };
+      })
+      .filter((r) => r.people)
+      .sort((a, b) => a.people.localeCompare(b.people, undefined, { sensitivity: 'base' }));
+
+    const csv = [
+      ['Seat Location', 'Seat Floor', 'Seat Number', 'People'].join(','),
+      ...rows.map((r) => [r.seatLocation, r.seatFloor, r.seatNumber, r.people].map(csvField).join(',')),
+    ].join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `seating-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   async function handleCreateTeam(name: string): Promise<Team> {
     if (!currentSite) throw new Error('No site selected');
     const team = await api.teams.create({ site_id: currentSite.id, name });
@@ -81,19 +127,27 @@ export default function PeoplePage() {
             {scope === 'site' ? `Employee directory for ${currentSite.name}` : 'Employee directory for all offices'}
           </p>
         </div>
-        <div className="flex shrink-0 gap-1 rounded-lg border border-slate-300 bg-white p-1 text-sm">
+        <div className="flex shrink-0 items-center gap-2">
           <button
-            className={`rounded-md px-3 py-1.5 ${scope === 'site' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
-            onClick={() => setScope('site')}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            onClick={handleExportSeating}
           >
-            This Office
+            Export seating (CSV)
           </button>
-          <button
-            className={`rounded-md px-3 py-1.5 ${scope === 'all' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
-            onClick={() => setScope('all')}
-          >
-            All Offices
-          </button>
+          <div className="flex gap-1 rounded-lg border border-slate-300 bg-white p-1 text-sm">
+            <button
+              className={`rounded-md px-3 py-1.5 ${scope === 'site' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
+              onClick={() => setScope('site')}
+            >
+              This Office
+            </button>
+            <button
+              className={`rounded-md px-3 py-1.5 ${scope === 'all' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}
+              onClick={() => setScope('all')}
+            >
+              All Offices
+            </button>
+          </div>
         </div>
       </div>
 
