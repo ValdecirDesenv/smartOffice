@@ -9,6 +9,7 @@ import UsersPage from './pages/UsersPage';
 import ConfigSnapshotsPage from './pages/ConfigSnapshotsPage';
 import DeskTicketsPage from './pages/DeskTicketsPage';
 import OffboardedPage from './pages/OffboardedPage';
+import IngestionEventsPage from './pages/IngestionEventsPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -71,6 +72,7 @@ function AppRoutes() {
             <Route path="/config-snapshots" element={<ConfigSnapshotsPage />} />
             <Route path="/desk-tickets" element={<DeskTicketsPage />} />
             <Route path="/offboarded" element={<OffboardedPage />} />
+            <Route path="/ingestion-events" element={<IngestionEventsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

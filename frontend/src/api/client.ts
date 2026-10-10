@@ -14,6 +14,8 @@ import type {
   DeskRequest,
   HubspotSyncResult,
   OffboardedEmployee,
+  IngestionEvent,
+  SeatDeviceRow,
 } from '../types';
 
 export class ApiError extends Error {
@@ -175,6 +177,11 @@ export const api = {
     ) => request<DeskRequest>('POST', `/api/desk-requests/${id}/approve`, data),
     reject: (id: string, review_note?: string) =>
       request<DeskRequest>('POST', `/api/desk-requests/${id}/reject`, { review_note }),
+  },
+  ingestionEvents: {
+    list: (params: { status?: string; q?: string; limit?: number; offset?: number } = {}) =>
+      request<{ rows: IngestionEvent[]; total: number }>('GET', `/api/ingestion-events${query(params)}`),
+    seats: () => request<SeatDeviceRow[]>('GET', '/api/ingestion-events/seats'),
   },
   hubspot: {
     sync: () => request<HubspotSyncResult>('POST', '/api/hubspot/sync-employees'),

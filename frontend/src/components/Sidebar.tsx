@@ -162,6 +162,11 @@ export default function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           Offboarded
         </NavLink>
       )}
+      {currentUser?.is_admin && (
+        <NavLink to="/ingestion-events" className={navLinkClass}>
+          Device Data
+        </NavLink>
+      )}
 
       {floorStats && currentFloor && (
         <div className="mt-4 rounded-lg border border-slate-800">

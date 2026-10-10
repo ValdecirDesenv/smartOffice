@@ -170,3 +170,33 @@ export interface DeskRequest {
   employee_id: string | null;
   employee_name: string | null;
 }
+
+export type IngestionEventStatus = 'received' | 'processed' | 'ignored' | 'error';
+
+export interface IngestionEvent {
+  id: string;
+  received_at: string;
+  processed_at: string | null;
+  processing_status: IngestionEventStatus;
+  error_detail: string | null;
+  site_id: string | null;
+  desktop_serial: string | null;
+  device_name: string | null;
+  logged_in_user: string | null;
+  ip_address: string | null;
+  collected_at: string | null;
+  monitors: Array<{ name?: string | null; serial?: string | null }> | null;
+  monitor_info_raw: string | null;
+}
+
+export interface SeatDeviceRow {
+  site_name: string;
+  floor_name: string;
+  seat_location: string;
+  workspace_id: string;
+  monitor_serial: string | null;
+  computer_serial: string | null;
+  employee_id: string | null;
+  assigned_to: string | null;
+  assigned_email: string | null;
+}
