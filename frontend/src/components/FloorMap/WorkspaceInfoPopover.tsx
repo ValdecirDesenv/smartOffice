@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Device, DeviceType, Employee, Team, Workspace, WorkspaceType } from '../../types';
+import { Device, DeviceType, Employee, Team, Workspace } from '../../types';
 
 const STATUS_DOT: Record<string, string> = {
   available: 'bg-emerald-500',
@@ -11,7 +11,6 @@ const STATUS_DOT: Record<string, string> = {
 
 interface WorkspaceInfoPopoverProps {
   workspace: Workspace;
-  workspaceType: WorkspaceType | null;
   assignedEmployee: Employee | null;
   assignedEmployeeTeam: Team | null;
   devices: Device[];
@@ -22,7 +21,6 @@ interface WorkspaceInfoPopoverProps {
 
 export default function WorkspaceInfoPopover({
   workspace,
-  workspaceType,
   assignedEmployee,
   assignedEmployeeTeam,
   devices,
@@ -73,18 +71,31 @@ export default function WorkspaceInfoPopover({
 
       <div className="mb-2">
         <div className="text-[11px] uppercase tracking-wide text-slate-500">Devices</div>
-        {devices.length === 0 ? (
-          <div className="text-sm text-slate-400">None</div>
-        ) : (
-          <ul className="text-sm">
-            {devices.map((d) => (
-              <li key={d.id}>{d.name || deviceTypes.find((t) => t.id === d.device_type_id)?.label}</li>
-            ))}
-          </ul>
-        )}
+        {/* Only devices with a serial are shown here - a generic undifferentiated device (e.g.
+            a dock with no serial on file) adds clutter without telling anyone anything useful;
+            serial number is specifically what the MDM desk-tracking pipeline keys off of (a
+            monitor's serial identifies the desk, a desktop's serial identifies the Mac mini),
+            so that's the bar for "worth surfacing here" rather than every device row that exists. */}
+        {(() => {
+          const serializedDevices = devices.filter((d) => d.serial_number);
+          if (serializedDevices.length === 0) {
+            return <div className="text-sm text-slate-400">None</div>;
+          }
+          return (
+            <ul className="space-y-1 text-sm">
+              {serializedDevices.map((d) => {
+                const typeLabel = deviceTypes.find((t) => t.id === d.device_type_id)?.label ?? 'Device';
+                return (
+                  <li key={d.id}>
+                    <span className="font-medium">{typeLabel}</span>
+                    <span className="text-slate-500">: {d.serial_number}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+        })()}
       </div>
-
-      {workspaceType && <div className="text-xs text-slate-400">{workspaceType.label}</div>}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Device, DeviceType, Employee, Label, Team, Workspace, WorkspaceType } from '../../types';
+import { Device, DeviceType, Employee, Label, Team, Workspace } from '../../types';
 import WorkspaceInfoPopover from './WorkspaceInfoPopover';
 import DeviceInfoPopover from './DeviceInfoPopover';
 
@@ -129,7 +129,6 @@ interface FloorMapCanvasProps {
   onMoveWorkspace: (id: string, posX: number, posY: number) => void;
   onMoveLabel: (id: string, posX: number, posY: number) => void;
   onMoveDevice: (id: string, posX: number, posY: number) => void;
-  workspaceTypes: WorkspaceType[];
   deviceTypes: DeviceType[];
   selectedWorkspaceEmployee: Employee | null;
   selectedWorkspaceEmployeeTeam: Team | null;
@@ -166,7 +165,6 @@ export default function FloorMapCanvas({
   onMoveWorkspace,
   onMoveLabel,
   onMoveDevice,
-  workspaceTypes,
   deviceTypes,
   selectedWorkspaceEmployee,
   selectedWorkspaceEmployeeTeam,
@@ -597,7 +595,6 @@ export default function FloorMapCanvas({
             <div ref={popoverRef}>
               <WorkspaceInfoPopover
                 workspace={w}
-                workspaceType={workspaceTypes.find((t) => t.id === w.workspace_type_id) ?? null}
                 assignedEmployee={selectedWorkspaceEmployee}
                 assignedEmployeeTeam={selectedWorkspaceEmployeeTeam}
                 devices={selectedWorkspaceDevices}

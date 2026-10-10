@@ -544,7 +544,6 @@ export default function FloorMapPage() {
               onMoveWorkspace={handleMoveWorkspace}
               onMoveLabel={handleMoveLabel}
               onMoveDevice={handleMoveDevice}
-              workspaceTypes={workspaceTypes}
               deviceTypes={deviceTypes}
               selectedWorkspaceEmployee={assignedEmployee}
               selectedWorkspaceEmployeeTeam={assignedEmployeeTeam}
