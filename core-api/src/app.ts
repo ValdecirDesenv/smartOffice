@@ -23,6 +23,9 @@ import assignmentsRoutes from './modules/assignments/assignments.routes';
 import hubspotRoutes from './modules/hubspot/hubspot.routes';
 import configSnapshotsRoutes from './modules/config-snapshots/config-snapshots.routes';
 import deskRequestsRoutes from './modules/desk-requests/desk-requests.routes';
+import ingestionRoutes from './modules/ingestion/ingestion.routes';
+import ingestionEventsRoutes from './modules/ingestion-events/ingestion-events.routes';
+import changeProposalsRoutes from './modules/change-proposals/change-proposals.routes';
 
 export function buildApp(): FastifyInstance {
   const fastify = Fastify({ logger: true });
@@ -68,6 +71,11 @@ export function buildApp(): FastifyInstance {
   fastify.register(hubspotRoutes, { prefix: '/api/hubspot' });
   fastify.register(configSnapshotsRoutes, { prefix: '/api/config-snapshots' });
   fastify.register(deskRequestsRoutes, { prefix: '/api/desk-requests' });
+  fastify.register(changeProposalsRoutes, { prefix: '/api/change-proposals' });
+  fastify.register(ingestionEventsRoutes, { prefix: '/api/ingestion-events' });
+  // Machine-to-machine, not a browser session - see require-auth.ts for its own exemption and
+  // ingestion.routes.ts for its shared-secret check.
+  fastify.register(ingestionRoutes, { prefix: '/api/ingestion' });
 
   // Uploaded files (floor backgrounds, employee/workspace photos), served read-only. Behind the
   // auth hook too - fine, the app only ever loads these while logged in anyway.

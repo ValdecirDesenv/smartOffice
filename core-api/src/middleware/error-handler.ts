@@ -30,6 +30,17 @@ export function errorHandler(error: FastifyError | PgError, request: FastifyRequ
     return;
   }
 
+  // Fastify itself already sets a correct 4xx statusCode for plenty of request-shape errors
+  // (e.g. an empty/malformed JSON body - exactly what a client-side bug upstream can produce,
+  // like the MDM collector script silently sending an empty payload if jq is missing) -
+  // respect that instead of flattening every single error down to a generic 500, which both
+  // hides the real (client-side) cause and is a wrong status code for a client mistake.
+  const statusCode = (error as FastifyError).statusCode;
+  if (statusCode && statusCode >= 400 && statusCode < 500) {
+    reply.code(statusCode).send({ error: error.message || 'Bad request' });
+    return;
+  }
+
   request.log.error(error);
   reply.code(500).send({ error: 'Internal server error' });
 }

@@ -32,6 +32,8 @@ services:
       GMAIL_USER: ${GMAIL_USER}
       GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD}
       HUBSPOT_ACCESS_TOKEN: ${HUBSPOT_ACCESS_TOKEN}
+      MDM_COLLECTOR_TOKEN: ${MDM_COLLECTOR_TOKEN}
+      MDM_BOOTSTRAP_UNTIL: ${MDM_BOOTSTRAP_UNTIL}
     volumes:
       - uploads:/data/uploads
     ports:
@@ -53,9 +55,17 @@ services:
       - "5174:5173"
     networks: [internal]
 
-  # Free Cloudflare Quick Tunnel: exposes core-api on a random https://*.trycloudflare.com
-  # URL with no domain and no Cloudflare dashboard setup. The URL is printed in this
-  # container's logs and changes if the container restarts - see `docker compose logs cloudflared`.
+  # TEMPORARY: reverted to the free Quick Tunnel to get SmartOffice back online immediately -
+  # the named tunnel (command: tunnel run, with CLOUDFLARE_TUNNEL_TOKEN below) had no Public
+  # Hostname route configured in the Cloudflare dashboard, so nothing resolved publicly even
+  # though the tunnel connector itself was connected. Switch back once that route exists:
+  #   command: tunnel run
+  #   environment: { TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN} }
+  # Quick Tunnel downside (why this is temporary, not the end state): the URL is random and
+  # changes every time this container restarts - printed in `docker compose logs cloudflared`.
+  # Fine for a human clicking a link, not fine for the Mosyle collector script's hardcoded
+  # target URL (mosyle/collect-desk-info.sh) - finish the named-tunnel route before relying on
+  # this for that.
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped

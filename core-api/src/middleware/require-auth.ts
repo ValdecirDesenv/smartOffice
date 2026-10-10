@@ -42,8 +42,18 @@ export async function getSessionUser(request: FastifyRequest): Promise<AuthedUse
 // route (/login, /reset-password?token=...). Those must reach the SPA shell + notFoundHandler
 // unauthenticated, so this checks the URL itself rather than relying on registration order to
 // exclude them: only /api/* requests are gated, and /api/auth/* (+ the health check) stay public.
+//
+// /api/ingestion/* is also exempt from the session-cookie check: it's hit by unattended scripts
+// running on managed Macs (the Mosyle desk-location collector, see mosyle/), not a browser, so
+// there's no session to have. It enforces its own shared-secret check instead - see
+// ingestion.routes.ts - which is why this exemption is safe despite skipping the auth gate here.
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
-  if (!request.url.startsWith('/api/') || request.url.startsWith('/api/auth/') || request.url === '/api/health') {
+  if (
+    !request.url.startsWith('/api/') ||
+    request.url.startsWith('/api/auth/') ||
+    request.url.startsWith('/api/ingestion/') ||
+    request.url === '/api/health'
+  ) {
     return;
   }
 

@@ -1,7 +1,7 @@
 import { PoolClient } from 'pg';
 
 export type AuditAction = 'create' | 'update' | 'delete';
-export type AuditSource = 'manual' | 'spreadsheet' | 'proposal' | 'hubspot_sync';
+export type AuditSource = 'manual' | 'spreadsheet' | 'proposal' | 'hubspot_sync' | 'mdm_bootstrap';
 
 export interface AuditParams {
   siteId: number | null;
